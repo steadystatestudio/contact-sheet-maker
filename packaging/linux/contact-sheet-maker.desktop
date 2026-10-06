@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Contact Sheet Maker
+Comment=Create offline printable contact sheets from local photographs
+Exec=Contact-Sheet-Maker
+Icon=contact-sheet-maker
+Categories=Graphics;Photography;
+Terminal=false
+StartupNotify=true

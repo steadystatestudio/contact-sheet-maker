@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+*.spec
+artifacts/
+# Reproducible generated examples and test output are delivered separately.
+docs/sample-export/
+docs/test-results.xml
