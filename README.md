@@ -30,13 +30,13 @@ python -m contact_sheet
 
 For the exact development dependency versions use `python -m pip install -r requirements-build-lock.txt` first. All packages come from the normal Python package index; no global installation is necessary. Installing requires Internet access; the running app does not.
 
-### Linux portable development build
+### Original local Linux development build
 
 Extract the supplied `Contact-Sheet-Maker-linux-x86_64.tar.gz` and run `Contact-Sheet-Maker/Contact-Sheet-Maker`. Keep the `_internal` directory next to the executable. Python and Qt are bundled. Built and offscreen-smoke-tested on Debian 13 x86_64; not an AppImage and not promised compatible with older distributions. A desktop display and normal Qt/X11 or Wayland system libraries are needed for interactive use. This build uses glibc 2.41; build from source on older systems.
 
 ### Windows
 
-See `packaging/README-WINDOWS.txt` for exact native build commands and the remaining smoke checklist. **No Windows executable is supplied, and Windows has not been tested.** PyInstaller must be run on Windows to create its native executable.
+See `packaging/README-WINDOWS.txt` for exact native build commands and the remaining interactive smoke checklist. The Windows CI job produces a native portable ZIP after tests and packaged smoke checks pass. Check the exact commit run before treating a package as validated; PyInstaller must run on Windows to create its native executable.
 
 ## Workflow
 
@@ -91,6 +91,6 @@ For a native folder/archive build without AppImage tooling, use `python scripts/
 - No direct printer integration, crop-to-fill, borders, per-photo caption editing, saved projects or recursive folder traversal.
 - Unicode paths work. Caption glyph coverage is font-dependent; DejaVu Sans is bundled for broad Latin/Greek/Cyrillic coverage, with platform CJK font fallback where installed. Emoji and every writing system are not guaranteed.
 - The 60M-pixel safety cap and one-source-at-a-time rendering bound large decoded images, but this is not a hardened untrusted-file sandbox. PNG decoding may still require substantial memory. PDF encoding retains compressed document data, so very large documents can consume increasing memory.
-- Native Windows behavior, high-DPI displays, screen readers, physical USB filesystems, distribution signing and wider Linux compatibility still need real-device validation before a public release.
+- Interactive Windows behavior, high-DPI displays, screen readers, physical USB filesystems, distribution signing and wider Linux compatibility still need real-device validation before a public release. Native CI results are recorded per commit and do not imply human QA.
 
 MIT license, copyright © 2026 Steady State Studio. The actual File Renamer theme/status component was adapted under its MIT license; exact provenance and dependency notices are in `THIRD_PARTY_NOTICES.md`. Development remains private. The workflow saves private CI artifacts and does not publish releases.

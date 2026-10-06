@@ -1,7 +1,8 @@
 CONTACT SHEET MAKER — WINDOWS BUILD INSTRUCTIONS
 
-This project has not been run or packaged on Windows yet. Build natively on
-Windows 10/11 x64 with Python 3.12 (official python.org distribution):
+Build natively on Windows 10/11 x64 with Python 3.12 (official python.org
+distribution). The private workflow also builds and smoke-tests on Windows
+Server 2022; consult the exact commit run for its current result.
 
   py -3.12 -m venv .venv
   .venv\Scripts\python -m pip install -r requirements-build-lock.txt
@@ -25,6 +26,6 @@ Recommended native smoke checks:
 Build scripts do not create releases, upload photos, or publish repositories.
 
 The private GitHub Actions workflow also builds and smoke-tests Windows.
-Consult the exact commit run for current native CI status; this document
-records the original local-development validation limits.
+Consult the exact commit run for current native CI status. Automated
+headless checks do not imply interactive or human usability validation.
 Successful runs provide Contact-Sheet-Maker-windows-x86_64.zip.
