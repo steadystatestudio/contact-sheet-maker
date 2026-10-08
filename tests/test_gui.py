@@ -397,7 +397,7 @@ def test_duplicate_import_after_export_keeps_result_and_folder_access(window, ap
     opened = []
     monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: opened.append(url.toLocalFile()) or True)
     window.open_folder_button.click()
-    assert opened == [str(tmp_path)]
+    assert [Path(folder) for folder in opened] == [tmp_path]
     assert (tmp_path / "completed.pdf").read_bytes() == saved
 
 
