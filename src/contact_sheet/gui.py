@@ -9,7 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Callable
 
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, QRectF, QSettings, QSize, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtCore import QAbstractTableModel, QItemSelectionModel, QModelIndex, QRectF, QSettings, QSize, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
@@ -72,6 +72,8 @@ class PhotoModel(QAbstractTableModel):
             return (str(index.row() + 1), visible_text(photo.path.name), f"{photo.width} × {photo.height}")[index.column()]
         if role == Qt.DecorationRole and index.column() == 1:
             return self.icons[index.row()]
+        if role == Qt.ToolTipRole:
+            return visible_text(str(photo.path))
         if role == Qt.AccessibleDescriptionRole:
             return str(photo.path)
         if role == Qt.TextAlignmentRole and index.column() != 1:
@@ -274,8 +276,9 @@ class MainWindow(QMainWindow):
         preview_layout.addLayout(preview_header)
         self.preview = PagePreview()
         preview_layout.addWidget(self.preview, 1)
-        self.preview_note = QLabel("Photos fit inside each cell without cropping.")
+        self.preview_note = QLabel("90 dpi preview · Export uses the selected resolution. Photos fit without cropping.")
         self.preview_note.setObjectName("muted")
+        self.preview_note.setWordWrap(True)
         preview_layout.addWidget(self.preview_note)
         self.splitter.addWidget(preview_area)
         self.splitter.setStretchFactor(0, 2)
@@ -465,6 +468,16 @@ class MainWindow(QMainWindow):
     def selected_rows(self):
         return sorted(index.row() for index in self.table.selectionModel().selectedRows())
 
+    def _select_rows(self, rows, current_row):
+        """Keep the keyboard anchor with the selection after a model reset."""
+        selection = self.table.selectionModel()
+        for row in rows:
+            selection.select(self.model.index(row, 0), QItemSelectionModel.Select | QItemSelectionModel.Rows)
+        current = self.model.index(current_row, 0)
+        selection.setCurrentIndex(current, QItemSelectionModel.NoUpdate)
+        self.table.scrollTo(current)
+        self.table.setFocus(Qt.OtherFocusReason)
+
     def move_selected(self, direction):
         if self.busy:
             return
@@ -472,12 +485,13 @@ class MainWindow(QMainWindow):
         if not rows or (direction < 0 and rows[0] == 0) or (direction > 0 and rows[-1] == len(self.model.photos) - 1):
             return
         photos = self.model.photos.copy()
+        current_row = self.table.currentIndex().row()
+        if current_row not in rows:
+            current_row = rows[0]
         for row in rows if direction < 0 else reversed(rows):
             photos[row], photos[row + direction] = photos[row + direction], photos[row]
         self.model.reset(photos)
-        from PySide6.QtCore import QItemSelectionModel
-        for row in rows:
-            self.table.selectionModel().select(self.model.index(row + direction, 0), QItemSelectionModel.Select | QItemSelectionModel.Rows)
+        self._select_rows([row + direction for row in rows], current_row + direction)
         self._schedule_preview()
 
     def remove_selected(self):
@@ -486,6 +500,11 @@ class MainWindow(QMainWindow):
         selected = set(self.selected_rows())
         if selected:
             self.model.reset([photo for i, photo in enumerate(self.model.photos) if i not in selected])
+            if self.model.photos:
+                next_row = min(min(selected), len(self.model.photos) - 1)
+                self._select_rows([next_row], next_row)
+            else:
+                self.table.setFocus(Qt.OtherFocusReason)
             self._schedule_preview()
 
     def clear_photos(self):
@@ -516,6 +535,7 @@ class MainWindow(QMainWindow):
         def work(cancel, progress):
             candidates = collect_paths(paths, cancel=cancel)
             photos, errors = [], []
+            duplicates = 0
             for index, path in enumerate(candidates):
                 if cancel.is_set():
                     raise ExportCancelled("Import cancelled")
@@ -524,20 +544,38 @@ class MainWindow(QMainWindow):
                         photos.append(inspect_photo(path, cancel=cancel))
                     except Exception as exc:
                         errors.append(f"{visible_text(path.name)}: {exc}")
+                else:
+                    duplicates += 1
                 progress(index + 1, len(candidates))
             if cancel.is_set():
                 raise ExportCancelled("Import cancelled")
-            return photos, errors
-        self._start_operation(work, self._import_done, "Adding photos…")
+            return photos, errors, duplicates
+        self._start_operation(work, self._import_done, "Adding photos…",
+                              cancel_message="Import cancelled. The photo list is unchanged.")
 
     def _import_done(self, result):
-        photos, errors = result
-        self.model.reset(self.model.photos + photos)
-        self._set_status(f"Added {len(photos)} photos. {len(errors)} could not be loaded." if errors else f"Added {len(photos)} photos.")
-        self._schedule_preview()
+        photos, errors, duplicates = result
+        if photos:
+            self.model.reset(self.model.photos + photos)
+            self._schedule_preview()
+        parts = [f"Added {len(photos)} photo{'s' if len(photos) != 1 else ''}." if photos else "No photos added."]
+        if duplicates:
+            parts.append(f"{duplicates} already in the list.")
+        if errors:
+            parts.append(f"{len(errors)} could not be loaded.")
+        if not photos and not errors and not duplicates:
+            parts.append("No JPEG or PNG photos found in this selection.")
+        # The automatic preview must not replace the import result.
+        self.status_locked = True
+        self.status.preview(len(self.model.photos), " ".join(parts))
         if errors and not self.closing:
-            box = QMessageBox(QMessageBox.Warning, "Some photos could not be added", f"{len(errors)} files were skipped. The rest are ready to use.", parent=self)
+            title = "Some photos could not be added" if photos else "Photos could not be added"
+            box = QMessageBox(QMessageBox.Warning, title,
+                              " ".join(parts) + "\n\nChoose Show Details to see which files failed and why.", parent=self)
+            box.setTextFormat(Qt.PlainText)
             box.setDetailedText("\n".join(errors[:100]))
+            if len(errors) > 100:
+                box.setInformativeText("Details show the first 100 files that could not be loaded.")
             box.exec()
 
     def _schedule_preview(self):
@@ -621,10 +659,11 @@ class MainWindow(QMainWindow):
         self.page_index += delta
         self._schedule_preview()
 
-    def _start_operation(self, work, on_result, message):
+    def _start_operation(self, work, on_result, message, *, cancel_message="Cancelled. No new sheets were saved."):
         if self.busy:
             return
         self.busy = True
+        self.operation_cancel_message = cancel_message
         self.status_locked = True
         if self.preview_task:
             self.preview_revision += 1
@@ -647,15 +686,17 @@ class MainWindow(QMainWindow):
         task.start()
 
     def _operation_progress(self, done, total):
+        if self.task and self.task.cancel.is_set():
+            return  # Queued progress must not replace "Cancelling safely…".
         self.progress.file_count = max(1, total)
         self.progress.setRange(0, max(1, total)); self.progress.setValue(done)
         self.progress.setFormat(f"{done} / {total} · Processing…")
 
     def _operation_failed(self, exc):
         if isinstance(exc, ExportCancelled):
-            self._set_status("Cancelled. No new sheets were saved.")
+            self.status.preview(0, self.operation_cancel_message)
             return
-        self._set_status(str(exc))
+        self.status.preview(0, str(exc))
         if not self.closing:
             QMessageBox.warning(self, "Operation could not finish", str(exc))
 
@@ -667,6 +708,7 @@ class MainWindow(QMainWindow):
         self.controls.setEnabled(True); self.output_controls.setEnabled(True)
         self.add_files.setEnabled(True); self.add_folder.setEnabled(True); self.settings_button.setEnabled(True)
         self.cancel_button.hide()
+        self.open_folder_button.setVisible(bool(self.last_outputs))
         self._refresh()
         if self.closing:
             self._finish_close()
@@ -718,6 +760,7 @@ class MainWindow(QMainWindow):
     def _export_done(self, paths):
         self.last_outputs = paths
         self._set_status(f"Saved {len(paths)} file{'s' if len(paths) != 1 else ''} to {paths[0].parent}")
+        self.open_folder_button.setToolTip(f"Open the last exported folder: {paths[0].parent}")
         self.open_folder_button.show()
 
     def _open_output_folder(self):

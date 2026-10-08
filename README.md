@@ -14,6 +14,7 @@ A private Steady State Studio desktop utility for turning local JPEG and PNG pho
 - Multipage PDF or numbered JPEG sheets at 150, 200 or 300 dpi. Photos always fit without cropping; EXIF rotation is honoured.
 - System/Dark/Light appearance, keyboard shortcuts, readable focus borders and accessible control labels.
 - Background import, preview and export with cancellation. Close during work asks first and waits for safe cleanup.
+- Import feedback stays visible after the preview finishes: added, already-listed and unreadable photos are counted separately. Cancelling an import leaves the photo list unchanged.
 
 ## Run from source
 
@@ -44,6 +45,8 @@ See `packaging/README-WINDOWS.txt` for exact native build commands and the remai
 2. Choose a preset or customize the layout. The current preview must finish successfully before Export enables. Use page arrows and Zoom to inspect it.
 3. Choose format, DPI and filename. Export Sheets asks for a destination directory. `contact-sheet.pdf` is one multipage PDF; JPEG yields `contact-sheet-001.jpg`, `contact-sheet-002.jpg`, etc.
 4. If output names already exist, explicitly choose whether to replace them. No means nothing changes; choose another filename or folder. Open Folder appears after success.
+
+Removing selected photos keeps the next remaining row selected so you can continue with the keyboard. Moving photos keeps the current row with its photo; Delete and Alt+Up/Down act only inside the photo list. Hover a photo row to read its full path. Duplicate-only additions preserve your selection and preview. Open Folder remains available for the last successful export after later imports or cancelled operations; its tooltip identifies that folder.
 
 PDF page dimensions match the selected paper. Captions are rendered at 8 pt and the optional title at 14 pt. Pages are raster images inside the PDF, so text is not selectable/searchable. The 90-dpi UI preview uses the same layout renderer; exported pages use the chosen higher DPI. Fonts and image resampling can make small preview text appear slightly different, while positions and full-photo fitting remain consistent.
 
