@@ -533,8 +533,21 @@ class MainWindow(QMainWindow):
             return
         existing = {os.path.normcase(str(photo.path.resolve())) for photo in self.model.photos}
         def work(cancel, progress):
-            candidates = collect_paths(paths, cancel=cancel)
-            photos, errors = [], []
+            candidates, errors, seen = [], [], set()
+            for item in paths:
+                try:
+                    found = collect_paths([item], cancel=cancel)
+                except ExportCancelled:
+                    raise
+                except (OSError, ValueError) as exc:
+                    errors.append(f"{visible_text(Path(item).name)}: {exc}")
+                    continue
+                for path in found:
+                    key = os.path.normcase(str(path))
+                    if key not in seen:
+                        seen.add(key)
+                        candidates.append(path)
+            photos = []
             duplicates = 0
             for index, path in enumerate(candidates):
                 if cancel.is_set():
@@ -732,7 +745,7 @@ class MainWindow(QMainWindow):
         settings = self.sheet_settings()
         stem = self.stem_input.text().strip()
         fmt = self.format_combo.currentText()
-        from .core import output_paths
+        from .core import output_paths, available_output_stem
         try:
             paths = output_paths(len(self.model.photos), settings, destination, stem, fmt)
         except (ValueError, OSError) as exc:
@@ -740,11 +753,22 @@ class MainWindow(QMainWindow):
         conflicts = [path for path in paths if path.exists() or path.is_symlink()]
         overwrite = False
         if conflicts:
-            box = QMessageBox(QMessageBox.Warning, "Replace existing sheets?", f"{len(conflicts)} output files already exist in this folder. Replace them?\n\nChoose No to change the filename or folder. Original photos can never be replaced.", QMessageBox.Yes | QMessageBox.No, self)
+            box = QMessageBox(QMessageBox.Warning, "Replace existing sheets?", f"{len(conflicts)} output file{'s' if len(conflicts) != 1 else ''} already exist{'' if len(conflicts) != 1 else 's'} in this folder.\n\nKeep Both saves this entire batch under a new filename. Original photos can never be replaced.", QMessageBox.Yes | QMessageBox.No, self)
+            box.button(QMessageBox.Yes).setText("Replace")
+            box.button(QMessageBox.No).setText("Cancel")
+            keep_both = box.addButton("Keep Both", QMessageBox.ActionRole)
             box.setDefaultButton(QMessageBox.No)
+            box.setEscapeButton(QMessageBox.No)
             box.setDetailedText("\n".join(str(path) for path in conflicts))
             overwrite = box.exec() == QMessageBox.Yes
-            if not overwrite:
+            if box.clickedButton() == keep_both:
+                try:
+                    stem = available_output_stem(len(self.model.photos), settings, destination, stem, fmt)
+                except (ValueError, OSError) as exc:
+                    QMessageBox.warning(self, "Choose a valid output name", str(exc)); return
+                self.stem_input.setText(stem)
+                overwrite = False
+            elif not overwrite:
                 return
         self.start_export(destination, stem, fmt, overwrite)
 
@@ -762,6 +786,16 @@ class MainWindow(QMainWindow):
         self._set_status(f"Saved {len(paths)} file{'s' if len(paths) != 1 else ''} to {paths[0].parent}")
         self.open_folder_button.setToolTip(f"Open the last exported folder: {paths[0].parent}")
         self.open_folder_button.show()
+        backups = getattr(paths, "retained_backups", ())
+        if backups:
+            self._set_status(f"Saved {len(paths)} file{'s' if len(paths) != 1 else ''}. Previous-sheet backups were kept.")
+            if not self.closing:
+                box = QMessageBox(QMessageBox.Warning, "Sheets saved; backups kept",
+                                  "Your new sheets were saved successfully. Some previous-sheet backups could not be removed. "
+                                  "You can remove them later after checking your new sheets.", parent=self)
+                box.setTextFormat(Qt.PlainText)
+                box.setDetailedText("\n".join(str(path) for path in backups))
+                box.exec()
 
     def _open_output_folder(self):
         if self.last_outputs:

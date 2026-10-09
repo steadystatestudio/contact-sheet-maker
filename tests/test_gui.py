@@ -440,3 +440,68 @@ def test_cancel_partial_import_after_export_discards_new_photos(window, app, tmp
     load(window, app, paths)
     assert len(window.model.photos) == 3
     assert window.status.text() == "Added 2 photos."
+
+
+def test_missing_selection_does_not_discard_valid_siblings(window, app, tmp_path, monkeypatch):
+    paths = sample_paths(tmp_path, 2)
+    boxes = []
+    monkeypatch.setattr(QMessageBox, 'exec', lambda box: boxes.append(box.detailedText()) or QMessageBox.Ok)
+    load(window, app, [paths[0], tmp_path / 'missing.png', paths[1], paths[0]])
+    assert [p.path for p in window.model.photos] == paths
+    assert window.status.text() == 'Added 2 photos. 1 could not be loaded.'
+    assert 'missing.png' in boxes[0]
+
+
+def test_keep_both_collision_uses_safe_new_batch(window, app, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+    load(window, app, sample_paths(tmp_path))
+    original = tmp_path / 'contact-sheet.pdf'
+    original.write_bytes(b'original')
+    monkeypatch.setattr(QFileDialog, 'getExistingDirectory', lambda *a, **kw: str(tmp_path))
+    def keep_both(box):
+        assert box.defaultButton() == box.button(QMessageBox.No)
+        next(button for button in box.buttons() if button.text() == 'Keep Both').click()
+        return 0
+    monkeypatch.setattr(QMessageBox, 'exec', keep_both)
+    window._choose_export()
+    wait(app, lambda: not window.busy)
+    assert original.read_bytes() == b'original'
+    assert (tmp_path / 'contact-sheet (2).pdf').exists()
+    assert window.stem_input.text() == 'contact-sheet (2)'
+
+
+def test_saved_with_retained_backup_has_honest_status(window, app, tmp_path, monkeypatch):
+    from contact_sheet.core import ExportedPaths
+    target, backup = tmp_path / 'sheet.pdf', tmp_path / 'backup-0'
+    boxes = []
+    monkeypatch.setattr(QMessageBox, 'exec', lambda box: boxes.append((box.text(), box.detailedText())) or QMessageBox.Ok)
+    window._export_done(ExportedPaths([target], [backup]))
+    assert window.status.text() == 'Saved 1 file. Previous-sheet backups were kept.'
+    assert window.last_outputs == [target]
+    assert not window.open_folder_button.isHidden()
+    assert str(backup) in boxes[0][1]
+    assert 'successfully' in boxes[0][0]
+
+
+def test_reordered_preview_and_all_exported_pages_match(window, app, tmp_path):
+    from PIL import ImageChops, ImageStat
+    from contact_sheet.core import render_page
+    paths = sample_paths(tmp_path, 5)
+    window.rows.setValue(1)
+    window.columns.setValue(2)
+    window.dpi_combo.setCurrentIndex(0)
+    load(window, app, paths)
+    select(window, [1, 3])
+    window.move_selected(-1)
+    wait(app, lambda: not window.preview_pending and window.preview_task is None)
+    expected_order = [paths[i] for i in [1, 0, 3, 2, 4]]
+    assert [p.path for p in window.model.photos] == expected_order
+    window.change_page(1)
+    wait(app, lambda: not window.preview_pending and window.preview_task is None)
+    window.start_export(tmp_path, 'ordered', 'JPEG')
+    wait(app, lambda: not window.busy)
+    assert [p.name for p in window.last_outputs] == [f'ordered-{i:03d}.jpg' for i in range(1, 4)]
+    for index, path in enumerate(window.last_outputs):
+        with render_page(window.model.photos, window.sheet_settings(), index) as expected, Image.open(path) as actual:
+            assert actual.size == expected.size
+            assert max(ImageStat.Stat(ImageChops.difference(actual, expected)).mean) < 1
