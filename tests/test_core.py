@@ -667,3 +667,83 @@ def test_small_sources_have_same_physical_fit_at_preview_and_export_dpi(make_pho
             assert (box[2] - box[0]) > 30  # This source is intentionally upscaled.
     for other in bounds[1:]:
         assert other == pytest.approx(bounds[0], abs=0.025)
+
+
+def test_keep_both_uses_one_available_stem_for_whole_batch(tmp_path):
+    from contact_sheet.core import available_output_stem
+    settings = SheetSettings(rows=1, columns=1)
+    (tmp_path / 'sheet-002.jpg').write_bytes(b'old')
+    (tmp_path / 'sheet (2)-001.jpg').mkdir()
+    occupied = tmp_path / 'sheet (3)-003.jpg'
+    try:
+        occupied.symlink_to(tmp_path / 'missing')
+    except OSError:  # Windows without permission to create symlinks.
+        occupied.write_bytes(b'occupied')
+    assert available_output_stem(3, settings, tmp_path, 'sheet', 'JPEG') == 'sheet (4)'
+    assert available_output_stem(1, settings, tmp_path, 'fresh', 'PDF') == 'fresh'
+
+
+def test_keep_both_long_stem_stays_valid(tmp_path):
+    from contact_sheet.core import available_output_stem, output_paths
+    stem = 'a' * 120
+    (tmp_path / f'{stem}.pdf').write_bytes(b'old')
+    chosen = available_output_stem(1, SheetSettings(), tmp_path, stem, 'PDF')
+    assert len(chosen) == 120
+    assert chosen.endswith(' (2)')
+    assert output_paths(1, SheetSettings(), tmp_path, chosen)
+
+
+def test_committed_export_reports_retained_backup_as_success(make_photo, settings, tmp_path, monkeypatch):
+    photo = make_photo('input.png')
+    target = tmp_path / 'sheet.pdf'
+    target.write_bytes(b'previous sheets')
+    real_unlink = Path.unlink
+    def locked_backup(path, *args, **kwargs):
+        if path.name.startswith('backup-'):
+            raise PermissionError('backup temporarily locked')
+        return real_unlink(path, *args, **kwargs)
+    monkeypatch.setattr(Path, 'unlink', locked_backup)
+    outputs = export_sheets([photo], settings, tmp_path, 'sheet', overwrite=True)
+    assert outputs == [target]
+    assert target.read_bytes().startswith(b'%PDF')
+    assert len(outputs.retained_backups) == 1
+    assert outputs.retained_backups[0].read_bytes() == b'previous sheets'
+
+
+def test_keep_both_search_is_bounded(tmp_path, monkeypatch):
+    from contact_sheet.core import available_output_stem
+    monkeypatch.setattr(Path, 'exists', lambda path: True)
+    with pytest.raises(ValueError, match='Choose another filename'):
+        available_output_stem(1, SheetSettings(), tmp_path, 'sheet')
+
+
+def test_keep_both_name_race_still_refuses_overwrite(make_photo, settings, tmp_path):
+    from contact_sheet.core import available_output_stem
+    photo = make_photo('input.png')
+    (tmp_path / 'sheet.pdf').write_bytes(b'old')
+    chosen = available_output_stem(1, settings, tmp_path, 'sheet')
+    raced = tmp_path / f'{chosen}.pdf'
+    raced.write_bytes(b'other writer')
+    with pytest.raises(FileExistsError):
+        export_sheets([photo], settings, tmp_path, chosen)
+    assert raced.read_bytes() == b'other writer'
+    assert (tmp_path / 'sheet.pdf').read_bytes() == b'old'
+    assert not list(tmp_path.glob('.contact-sheet-*'))
+
+
+@pytest.mark.parametrize('format', ['PDF', 'JPEG'])
+def test_cancel_keep_both_batch_preserves_old_outputs(make_photo, tmp_path, format):
+    from contact_sheet.core import available_output_stem, output_paths
+    photo = make_photo('input.png')
+    settings = SheetSettings(rows=1, columns=1, dpi=150)
+    old_paths = output_paths(2, settings, tmp_path, 'sheet', format)
+    for path in old_paths:
+        path.write_bytes(b'old sheet')
+    chosen = available_output_stem(2, settings, tmp_path, 'sheet', format)
+    cancel = threading.Event()
+    with pytest.raises(ExportCancelled):
+        export_sheets([photo, photo], settings, tmp_path, chosen, format,
+                      cancel=cancel, progress=lambda done, total: cancel.set())
+    assert all(path.read_bytes() == b'old sheet' for path in old_paths)
+    assert not any(path.exists() for path in output_paths(2, settings, tmp_path, chosen, format))
+    assert not list(tmp_path.glob('.contact-sheet-*'))

@@ -380,6 +380,26 @@ def output_paths(count: int, settings: SheetSettings, destination: Path,
     return [destination / f"{stem}-{number:03d}.jpg" for number in range(1, pages + 1)]
 
 
+
+def available_output_stem(count: int, settings: SheetSettings, destination: Path,
+                          stem: str = "contact-sheet", format: str = "PDF") -> str:
+    """Find one unused name for the whole batch; export still installs exclusively.
+
+    This is a suggestion, not a reservation. A file arriving later must cause the
+    normal non-overwrite export to fail safely rather than silently replacing it.
+    """
+    candidate = stem
+    number = 1
+    for _ in range(100):
+        paths = output_paths(count, settings, destination, candidate, format)
+        if not any(path.exists() or path.is_symlink() for path in paths):
+            return candidate
+        number += 1
+        suffix = f" ({number})"
+        candidate = stem[:120 - len(suffix)].rstrip(" .") + suffix
+    raise ValueError("No unused batch name found. Choose another filename or folder.")
+
+
 def _snapshot(path: Path) -> tuple[int, ...] | None:
     try:
         value = path.lstat()
@@ -485,7 +505,7 @@ def _install_exclusive(source: Path, target: Path, cancel=None) -> tuple[int, ..
 
 
 def _commit_outputs(staged: list[Path], outputs: list[Path], snapshots: list,
-                    photos: list[Photo], cancel) -> None:
+                    photos: list[Photo], cancel) -> list[Path]:
     """Exclusive installation avoids racing another file into oblivion."""
     _check_cancel(cancel)
     _protect_sources(photos, outputs)
@@ -528,8 +548,23 @@ def _commit_outputs(staged: list[Path], outputs: list[Path], snapshots: list,
                 message += f". Original backups are preserved in {staged[0].parent}"
             raise RuntimeError(message) from exc
         raise
+    retained = []
     for backup, _ in backups:
-        backup.unlink()
+        try:
+            backup.unlink()
+        except OSError:
+            # Installation succeeded. Report cleanup separately so callers do
+            # not retry a completed export or claim that nothing was saved.
+            retained.append(backup)
+    return retained
+
+
+class ExportedPaths(list):
+    """Successful output paths plus any previous-sheet backups left for cleanup."""
+
+    def __init__(self, paths, retained_backups=()):
+        super().__init__(paths)
+        self.retained_backups = tuple(retained_backups)
 
 
 def export_sheets(photos: list[Photo], settings: SheetSettings, destination: Path,
@@ -588,8 +623,8 @@ def export_sheets(photos: list[Photo], settings: SheetSettings, destination: Pat
                     progress(page_index + 1, total)
         _check_cancel(cancel)
         _verify_sources(photos, cancel)
-        _commit_outputs(staged, outputs, snapshots, photos, cancel)
-        return outputs
+        retained = _commit_outputs(staged, outputs, snapshots, photos, cancel)
+        return ExportedPaths(outputs, retained)
     finally:
         # Retain any irreplaceable rollback backup, otherwise remove all staging files.
         if not any(stage_dir.glob("backup-*")):

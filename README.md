@@ -14,7 +14,7 @@ A private Steady State Studio desktop utility for turning local JPEG and PNG pho
 - Multipage PDF or numbered JPEG sheets at 150, 200 or 300 dpi. Photos always fit without cropping; EXIF rotation is honoured.
 - System/Dark/Light appearance, keyboard shortcuts, readable focus borders and accessible control labels.
 - Background import, preview and export with cancellation. Close during work asks first and waits for safe cleanup.
-- Import feedback stays visible after the preview finishes: added, already-listed and unreadable photos are counted separately. Cancelling an import leaves the photo list unchanged.
+- Import feedback stays visible after the preview finishes: added, already-listed and unreadable photos are counted separately. Missing or unreadable selections are reported while valid selections are added. Cancelling an import leaves the photo list unchanged.
 
 ## Run from source
 
@@ -44,7 +44,7 @@ See `packaging/README-WINDOWS.txt` for exact native build commands and the remai
 1. Add photos/folder. Select rows and use ↑/↓ to establish print order; Alt+Up/Down also works, Delete removes selected rows, Ctrl+O adds photos.
 2. Choose a preset or customize the layout. The current preview must finish successfully before Export enables. Use page arrows and Zoom to inspect it.
 3. Choose format, DPI and filename. Export Sheets asks for a destination directory. `contact-sheet.pdf` is one multipage PDF; JPEG yields `contact-sheet-001.jpg`, `contact-sheet-002.jpg`, etc.
-4. If output names already exist, explicitly choose whether to replace them. No means nothing changes; choose another filename or folder. Open Folder appears after success.
+4. If output names already exist, choose Replace, Keep Both, or Cancel. Keep Both uses one unused filename for the whole batch, such as `contact-sheet (2)`; Cancel leaves everything unchanged. Open Folder appears after success.
 
 Removing selected photos keeps the next remaining row selected so you can continue with the keyboard. Moving photos keeps the current row with its photo; Delete and Alt+Up/Down act only inside the photo list. Hover a photo row to read its full path. Duplicate-only additions preserve your selection and preview. Open Folder remains available for the last successful export after later imports or cancelled operations; its tooltip identifies that folder.
 
@@ -56,7 +56,7 @@ No telemetry, automatic upload, cloud account, subscription, watermark, or featu
 
 Original photos are never modified. Output names cannot replace source files, including hardlink aliases. Files are inspected as actual JPEG/PNG content, corruption is reported, and images above 60 million pixels are refused. Very large compressed files can still take time to read; native decoder calls cannot be interrupted halfway through, so cancellation is checked between safe steps. Source fingerprints detect photos changed since import or while generating sheets and stop export rather than quietly using mixed versions.
 
-All sheets render into a temporary directory inside the selected destination before commit. Existing outputs require explicit replacement; exclusive installation rejects unexpected files that appear during export. Cancellation and ordinary commit failures roll back installed files and restore previous outputs. If another process blocks restoration, the error identifies retained backups for manual recovery.
+All sheets render into a temporary directory inside the selected destination before commit. Existing outputs require explicit replacement; exclusive installation rejects unexpected files that appear during export. Cancellation and ordinary commit failures roll back installed files and restore previous outputs. If another process blocks restoration, the error identifies retained backups for manual recovery. If export succeeds but old backups cannot be removed, the app confirms the sheets were saved and lists those backups separately.
 
 On filesystems without hardlinks, an exclusive-create copy fallback is used (Windows first uses native no-replace rename). The copy fallback can briefly expose an incomplete newly created output. **Abrupt process termination, power loss, disk failure or outside modification during a multi-file commit cannot guarantee rollback.** Do not point another program at output files while exporting; keep backups of important prior sheets. Filesystem fallback is fault-injection-tested here, not tested against a physical exFAT volume.
 
