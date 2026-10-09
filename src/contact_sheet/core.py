@@ -389,14 +389,24 @@ def available_output_stem(count: int, settings: SheetSettings, destination: Path
     normal non-overwrite export to fail safely rather than silently replacing it.
     """
     candidate = stem
+    paths = output_paths(count, settings, destination, candidate, format)
+    occupied_jpeg_stems = set()
+    if format.upper() == "JPEG":
+        # Older batches can have more pages than this one. Do not mix the new
+        # batch with their trailing sheets, even when page 001 no longer exists.
+        for path in Path(destination).expanduser().iterdir():
+            match = re.fullmatch(r"(.+)-[0-9]{3,}\.jpg", os.path.normcase(path.name))
+            if match:
+                occupied_jpeg_stems.add(match.group(1))
     number = 1
     for _ in range(100):
-        paths = output_paths(count, settings, destination, candidate, format)
-        if not any(path.exists() or path.is_symlink() for path in paths):
+        if (os.path.normcase(candidate) not in occupied_jpeg_stems
+                and not any(path.exists() or path.is_symlink() for path in paths)):
             return candidate
         number += 1
         suffix = f" ({number})"
         candidate = stem[:120 - len(suffix)].rstrip(" .") + suffix
+        paths = output_paths(count, settings, destination, candidate, format)
     raise ValueError("No unused batch name found. Choose another filename or folder.")
 
 

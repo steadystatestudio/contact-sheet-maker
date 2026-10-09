@@ -747,3 +747,11 @@ def test_cancel_keep_both_batch_preserves_old_outputs(make_photo, tmp_path, form
     assert all(path.read_bytes() == b'old sheet' for path in old_paths)
     assert not any(path.exists() for path in output_paths(2, settings, tmp_path, chosen, format))
     assert not list(tmp_path.glob('.contact-sheet-*'))
+
+
+def test_keep_both_avoids_leftover_pages_of_an_older_longer_batch(tmp_path):
+    from contact_sheet.core import available_output_stem
+    settings = SheetSettings(rows=1, columns=1)
+    (tmp_path / 'sheet-001.jpg').write_bytes(b'old first batch')
+    (tmp_path / 'sheet (2)-009.jpg').write_bytes(b'old longer second batch')
+    assert available_output_stem(1, settings, tmp_path, 'sheet', 'JPEG') == 'sheet (3)'
