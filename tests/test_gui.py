@@ -237,3 +237,206 @@ def test_zoom_is_dismissible_and_preserves_page(window,app,tmp_path):
     QTimer.singleShot(20,close_dialog)
     window._zoom_preview()
     assert window.page_index==before and window.export_button.isEnabled()
+
+
+def test_import_result_survives_preview_and_explains_duplicates(window, app, tmp_path):
+    paths = sample_paths(tmp_path, 3)
+    load(window, app, paths)
+    assert window.status.text() == "Added 3 photos."
+    select(window, [1])
+    window.table.selectionModel().setCurrentIndex(window.model.index(1, 0), QItemSelectionModel.NoUpdate)
+    preview_key = window.preview.pixmap.cacheKey()
+    load(window, app, paths)
+    assert window.status.text() == "No photos added. 3 already in the list."
+    assert window.selected_rows() == [1]
+    assert window.table.currentIndex().row() == 1
+    assert window.preview.pixmap.cacheKey() == preview_key
+    assert window.export_button.isEnabled()
+    extra = tmp_path / "new.png"
+    Image.new("RGB", (40, 30), "green").save(extra)
+    load(window, app, [paths[0], extra])
+    assert window.status.text() == "Added 1 photo. 1 already in the list."
+    assert len(window.model.photos) == 4
+    window.rows.setValue(5)
+    wait(app, lambda: not window.preview_pending and window.preview_task is None)
+    assert "Originals stay untouched" in window.status.text()
+
+
+@pytest.mark.parametrize("with_existing", [False, True])
+def test_empty_import_explains_supported_files(window, app, tmp_path, with_existing):
+    if with_existing:
+        load(window, app, sample_paths(tmp_path, 1))
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    (empty / "notes.txt").write_text("not a photo")
+    load(window, app, [empty])
+    assert window.status.text() == "No photos added. No JPEG or PNG photos found in this selection."
+    assert len(window.model.photos) == int(with_existing)
+    assert window.export_button.isEnabled() == with_existing
+
+
+@pytest.mark.parametrize("valid_count", [0, 1])
+def test_failed_import_has_truthful_counts_and_details(window, app, tmp_path, monkeypatch, valid_count):
+    paths = sample_paths(tmp_path, valid_count)
+    broken = tmp_path / "broken.png"
+    broken.write_bytes(b"not an image")
+    boxes = []
+    def dismiss(box):
+        boxes.append((box.windowTitle(), box.text(), box.detailedText()))
+        return QMessageBox.Ok
+    monkeypatch.setattr(QMessageBox, "exec", dismiss)
+    load(window, app, paths + [broken])
+    assert len(boxes) == 1
+    assert "1 could not be loaded." in window.status.text()
+    assert "The rest are ready" not in boxes[0][1]
+    assert "broken.png" in boxes[0][2]
+    assert window.export_button.isEnabled() == bool(valid_count)
+    assert ("Added 1 photo." if valid_count else "No photos added.") in boxes[0][1]
+    assert boxes[0][0] == ("Some photos could not be added" if valid_count else "Photos could not be added")
+
+
+def test_cancel_import_preserves_list_and_keeps_cancelling_status(window, app, tmp_path, monkeypatch):
+    import threading
+    load(window, app, sample_paths(tmp_path, 1))
+    before = list(window.model.photos)
+    started, release = threading.Event(), threading.Event()
+    def slow_collect(paths, cancel):
+        started.set()
+        assert release.wait(5)
+        raise ExportCancelled()
+    monkeypatch.setattr("contact_sheet.gui.collect_paths", slow_collect)
+    window.add_paths([tmp_path])
+    wait(app, started.is_set)
+    try:
+        window.cancel_operation()
+        window._operation_progress(1, 2)
+        assert window.status.text() == "Cancelling safely…"
+        assert not window.cancel_button.isEnabled()
+    finally:
+        release.set()
+    wait(app, lambda: not window.busy)
+    assert window.model.photos == before
+    assert window.status.text() == "Import cancelled. The photo list is unchanged."
+    assert window.status.maximum() > 0
+    assert window.export_button.isEnabled()
+
+
+def test_remove_keeps_next_row_and_repeated_delete_respects_text_focus(window, app, tmp_path):
+    from PySide6.QtTest import QTest
+    paths = sample_paths(tmp_path, 4)
+    load(window, app, paths)
+    window.activateWindow()
+    select(window, [1, 2])
+    window.remove_button.click()
+    assert [p.path for p in window.model.photos] == [paths[0], paths[3]]
+    assert window.selected_rows() == [1]
+    assert window.model.photos[window.table.currentIndex().row()].path == paths[3]
+    assert window.table.currentIndex().row() == 1
+    assert window.table.hasFocus()
+    QTest.keyClick(window.table, Qt.Key_Delete)
+    assert [p.path for p in window.model.photos] == [paths[0]]
+    assert window.selected_rows() == [0]
+    window.title_input.setText("A title")
+    window.title_input.setFocus()
+    window.title_input.selectAll()
+    QTest.keyClick(window.title_input, Qt.Key_Delete)
+    assert window.title_input.text() == ""
+    assert len(window.model.photos) == 1
+    window.table.setFocus()
+    QTest.keyClick(window.table, Qt.Key_Delete)
+    assert window.model.photos == []
+    assert not window.table.currentIndex().isValid()
+    QTest.keyClick(window.table, Qt.Key_Delete)
+    assert window.model.photos == []
+
+
+def test_reorder_preserves_keyboard_anchor_for_repeated_moves(window, app, tmp_path):
+    from PySide6.QtTest import QTest
+    paths = sample_paths(tmp_path, 5)
+    load(window, app, paths)
+    window.activateWindow()
+    select(window, [2, 3])
+    window.table.selectionModel().setCurrentIndex(window.model.index(3, 0), QItemSelectionModel.NoUpdate)
+    window.up_button.click()
+    assert window.selected_rows() == [1, 2]
+    assert window.table.currentIndex().row() == 2
+    assert window.table.hasFocus()
+    QTest.keyClick(window.table, Qt.Key_Up, Qt.AltModifier)
+    assert window.selected_rows() == [0, 1]
+    assert window.table.currentIndex().row() == 1
+    assert [p.path for p in window.model.photos][:2] == paths[2:4]
+    QTest.keyClick(window.table, Qt.Key_Up, Qt.AltModifier)
+    assert window.selected_rows() == [0, 1]
+    QTest.keyClick(window.table, Qt.Key_Down, Qt.AltModifier)
+    assert window.selected_rows() == [1, 2]
+    assert window.table.currentIndex().row() == 2
+
+
+def test_full_paths_and_preview_resolution_are_visible(window, app, tmp_path):
+    long_name = tmp_path / ("A very long photo filename " * 5 + "café.png")
+    Image.new("RGB", (40, 30), "blue").save(long_name)
+    load(window, app, [long_name])
+    assert window.model.data(window.model.index(0, 1), Qt.ToolTipRole) == str(long_name)
+    assert "90 dpi preview" in window.preview_note.text()
+    assert window.preview_note.wordWrap()
+
+
+def test_duplicate_import_after_export_keeps_result_and_folder_access(window, app, tmp_path, monkeypatch):
+    paths = sample_paths(tmp_path, 1)
+    load(window, app, paths)
+    window.start_export(tmp_path, "completed", "PDF")
+    wait(app, lambda: not window.busy)
+    saved = (tmp_path / "completed.pdf").read_bytes()
+    assert window.status.text().startswith("Saved 1 file")
+    # Add during a queued preview, as well as after a settled one.
+    window.rows.setValue(5)
+    load(window, app, paths)
+    assert window.status.text() == "No photos added. 1 already in the list."
+    assert window.open_folder_button.isVisible()
+    assert "last exported folder" in window.open_folder_button.toolTip()
+    opened = []
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: opened.append(url.toLocalFile()) or True)
+    window.open_folder_button.click()
+    assert [Path(folder) for folder in opened] == [tmp_path]
+    assert (tmp_path / "completed.pdf").read_bytes() == saved
+
+
+def test_cancel_partial_import_after_export_discards_new_photos(window, app, tmp_path, monkeypatch):
+    import threading
+    load(window, app, sample_paths(tmp_path, 1))
+    before = list(window.model.photos)
+    window.start_export(tmp_path, "completed", "PDF")
+    wait(app, lambda: not window.busy)
+    saved = (tmp_path / "completed.pdf").read_bytes()
+    more = tmp_path / "more"
+    more.mkdir()
+    paths = sample_paths(more, 2)
+    inspected = []
+    started, release = threading.Event(), threading.Event()
+    real_inspect = inspect_photo
+    def slow_inspect(path, cancel):
+        if inspected:
+            started.set()
+            assert release.wait(5)
+        result = real_inspect(path, cancel=cancel)
+        inspected.append(path)
+        return result
+    monkeypatch.setattr("contact_sheet.gui.inspect_photo", slow_inspect)
+    window.add_paths(paths)
+    try:
+        wait(app, started.is_set)
+        assert inspected == [paths[0]]
+        window.cancel_operation()
+    finally:
+        release.set()
+    wait(app, lambda: not window.busy)
+    assert window.model.photos == before
+    assert window.status.text() == "Import cancelled. The photo list is unchanged."
+    assert window.open_folder_button.isVisible()
+    assert window.last_outputs == [tmp_path / "completed.pdf"]
+    assert (tmp_path / "completed.pdf").read_bytes() == saved
+    # A retry starts cleanly and can add both photos.
+    monkeypatch.setattr("contact_sheet.gui.inspect_photo", real_inspect)
+    load(window, app, paths)
+    assert len(window.model.photos) == 3
+    assert window.status.text() == "Added 2 photos."
