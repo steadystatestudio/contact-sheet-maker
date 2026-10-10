@@ -173,6 +173,7 @@ class MainWindow(QMainWindow):
         apply_theme(QApplication.instance(), self.settings.value("theme", "system", type=str))
         self._build_ui()
         self._restore_settings()
+        self._fit_to_screen()
         self._restoring = False
         self.debounce = QTimer(self)
         self.debounce.setSingleShot(True)
@@ -191,9 +192,19 @@ class MainWindow(QMainWindow):
     def _build_ui(self):
         root = QWidget()
         self.setCentralWidget(root)
-        layout = QVBoxLayout(root)
-        layout.setContentsMargins(16, 16, 16, 12)
+        outer = QVBoxLayout(root)
+        outer.setContentsMargins(16, 16, 16, 12)
+        outer.setSpacing(12)
+        self.work_scroll = QScrollArea()
+        self.work_scroll.setWidgetResizable(True)
+        self.work_scroll.setFrameShape(QFrame.NoFrame)
+        self.work_scroll.setAccessibleName("Photos, preview and sheet layout")
+        work = QWidget()
+        layout = QVBoxLayout(work)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
+        self.work_scroll.setWidget(work)
+        outer.addWidget(self.work_scroll, 1)
         toolbar = QHBoxLayout()
         self.add_files = self._button("Add Photos", self._browse_files, "Choose JPEG or PNG photos · Ctrl+O")
         self.add_folder = self._button("Add Folder", self._browse_folder, "Add JPEG and PNG files in one folder; no subfolders")
@@ -333,17 +344,20 @@ class MainWindow(QMainWindow):
         self.format_combo.setToolTip("PDF: one multipage document. JPEG: one numbered image per page.")
         self.dpi_combo.setToolTip("Print resolution. 200 dpi balances sharpness and file size; 300 dpi gives finer detail.")
         output_left_row.addWidget(format_label); output_left_row.addWidget(self.format_combo); output_left_row.addWidget(dpi_label); output_left_row.addWidget(self.dpi_combo); output_left_row.addStretch()
+        self.output_left = output_left
         out.addWidget(output_left, 0, 0)
         output_right = QWidget(); output_right_row = QHBoxLayout(output_right); output_right_row.setContentsMargins(0, 0, 0, 0)
         name_label = QLabel("Filename"); name_label.setObjectName("muted"); name_label.setBuddy(self.stem_input)
         output_right_row.addWidget(name_label); output_right_row.addWidget(self.stem_input)
+        self.output_right = output_right
         out.addWidget(output_right, 0, 2)
         out.setColumnStretch(0, 1); out.setColumnStretch(2, 1)
         self.export_button = self._button("Export Sheets…", self._choose_export, "Choose a destination and export every page")
         self.export_button.setObjectName("primary")
         self.export_button.setMinimumWidth(190)
         out.addWidget(self.export_button, 0, 1, Qt.AlignCenter)
-        layout.addWidget(self.output_controls)
+        outer.addWidget(self.output_controls)
+        self._compact_output = None
         status_row = QHBoxLayout()
         self.status = FileProgressBar()
         self.status.setAccessibleName("Contact sheet status and progress")
@@ -357,8 +371,8 @@ class MainWindow(QMainWindow):
         self.open_folder_button.hide()
         status_row.addWidget(self.status, 1)
         status_row.addWidget(self.cancel_button); status_row.addWidget(self.open_folder_button)
-        layout.addLayout(status_row)
-        self.setMinimumSize(890, 700)
+        outer.addLayout(status_row)
+        self.setMinimumSize(640, 420)
         self.resize(1120, 860)
         self.shortcuts = []
         for key, callback, target in [("Ctrl+O", self._browse_files, self), ("Delete", self.remove_selected, self.table), ("Alt+Up", lambda: self.move_selected(-1), self.table), ("Alt+Down", lambda: self.move_selected(1), self.table)]:
@@ -370,6 +384,52 @@ class MainWindow(QMainWindow):
 
     def sheet_settings(self):
         return SheetSettings(page_size=self.page_size.currentText(), orientation=self.orientation.currentText(), rows=self.rows.value(), columns=self.columns.value(), margin_mm=self.margin.value(), gap_mm=self.gap.value(), captions=self.captions.isChecked(), title=self.title_input.text(), dpi=int(self.dpi_combo.currentText().split()[0]))
+
+    def _arrange_output(self):
+        """Keep export reachable while narrow work areas scroll independently."""
+        if not hasattr(self, "output_right"):
+            return
+        grid = self.output_controls.layout()
+        needed = (self.output_left.sizeHint().width() + self.output_right.sizeHint().width()
+                  + self.export_button.sizeHint().width() + 2 * grid.horizontalSpacing())
+        compact = self.output_controls.width() < max(860, needed)
+        if compact == self._compact_output:
+            return
+        self._compact_output = compact
+        for widget in (self.output_left, self.output_right, self.export_button):
+            grid.removeWidget(widget)
+        if compact:
+            grid.addWidget(self.output_left, 0, 0, 1, 3)
+            grid.addWidget(self.output_right, 1, 0, 1, 3)
+            grid.addWidget(self.export_button, 2, 0, 1, 3)
+        else:
+            grid.addWidget(self.output_left, 0, 0)
+            grid.addWidget(self.export_button, 0, 1, Qt.AlignCenter)
+            grid.addWidget(self.output_right, 0, 2)
+
+    def _fit_to_screen(self, available=None):
+        """Recover a fully usable window after a monitor or scaling change."""
+        if available is None:
+            screen = QApplication.screenAt(self.frameGeometry().center()) or self.screen()
+            available = screen.availableGeometry()
+        frame = self.frameGeometry()
+        frame_width = max(0, frame.width() - self.width())
+        frame_height = max(0, frame.height() - self.height())
+        self.resize(min(self.width(), available.width() - frame_width),
+                    min(self.height(), available.height() - frame_height))
+        frame = self.frameGeometry()
+        left = min(max(frame.left(), available.left()), available.right() - frame.width() + 1)
+        top = min(max(frame.top(), available.top()), available.bottom() - frame.height() + 1)
+        self.move(left, top)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._arrange_output()
+        QTimer.singleShot(0, self._fit_to_screen)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._arrange_output()
 
     def _connect_controls(self):
         self.preset.activated.connect(self._apply_preset)

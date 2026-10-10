@@ -67,7 +67,8 @@ def main() -> int:
         destination = Path(temp) / 'smoke-output'
         completed = subprocess.run([str(executable), '--smoke-test', str(destination)],
                                    capture_output=True, text=True, timeout=args.timeout,
-                                   env=environment, cwd=temp)
+                                   env=environment, cwd=temp,
+                                   creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
         output.mkdir(parents=True)
         (output / 'process.log').write_text(completed.stdout + '\n' + completed.stderr, encoding='utf-8')
         if completed.returncode:
@@ -77,7 +78,8 @@ def main() -> int:
         result['platform'] = sys.platform
         result['qt_platform'] = environment['QT_QPA_PLATFORM']
         (output / 'result.json').write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding='utf-8')
-        shutil.copy2(destination / 'ui.png', output / 'ui.png')
+        for screenshot in destination.glob('ui*.png'):
+            shutil.copy2(screenshot, output / screenshot.name)
         shutil.copytree(destination / 'outputs', output / 'outputs')
     print(f'Packaged smoke passed: {executable.name}; report: {output}')
     return 0

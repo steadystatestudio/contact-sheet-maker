@@ -113,6 +113,8 @@ def write_build_info(root: Path, bundle: Path, target_platform: str) -> None:
             pass
     info = {
         "application": NAME,
+        "repository": "steadystatestudio/contact-sheet-maker",
+        "source_tree": os.environ.get("BUILD_SOURCE_TREE"),
         "application_version": metadata.version("steady-contact-sheet"),
         "source_commit": source_revision(root),
         "python": platform.python_version(),
