@@ -8,6 +8,7 @@ from pathlib import Path
 from PIL import Image
 from PySide6.QtCore import QSettings
 from .gui import MainWindow
+from .themes import apply_theme
 
 
 def run(app, destination: Path) -> int:
@@ -38,6 +39,19 @@ def run(app, destination: Path) -> int:
     assert len(window.model.photos) == 13 and window.export_button.isEnabled()
     assert not window.preview.pixmap.isNull()
     assert window.grab().save(str(destination / "ui.png"))
+    for theme, size, name in (("light", (853, 480), "ui-compact"),
+                              ("dark", (1280, 680), "ui-dark")):
+        apply_theme(app, theme)
+        window.resize(*size)
+        app.processEvents()
+        assert window.width() <= size[0] and window.height() <= size[1]
+        assert window.export_button.isVisible() and window.status.isVisible()
+        assert window.grab().save(str(destination / f"{name}.png"))
+        if size[1] == 480:
+            window.work_scroll.ensureWidgetVisible(window.title_input)
+            app.processEvents()
+            assert window.grab().save(str(destination / "ui-compact-layout.png"))
+            window.work_scroll.verticalScrollBar().setValue(0)
     window.start_export(outputs, "smoke", "PDF", overwrite=True)
     drain(lambda: not window.busy)
     assert (outputs / "smoke.pdf").read_bytes().startswith(b"%PDF")

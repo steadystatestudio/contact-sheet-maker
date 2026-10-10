@@ -193,6 +193,49 @@ def test_small_window_controls_visible(window,app):
     assert window.splitter.height()>=230
 
 
+@pytest.mark.parametrize("size", [(853, 480), (1280, 680)])
+def test_compact_window_keeps_export_and_status_reachable(window, app, size):
+    from PySide6.QtCore import QPoint, QRect
+    window.resize(*size)
+    app.processEvents()
+    assert window.width() <= size[0] and window.height() <= size[1]
+    for widget in (window.export_button, window.status, window.format_combo, window.stem_input):
+        bounds = QRect(widget.mapTo(window, QPoint()), widget.size())
+        assert window.rect().contains(bounds), (widget.objectName(), bounds, window.rect())
+    if size[1] == 480:
+        assert window.work_scroll.verticalScrollBar().maximum() > 0
+        window.work_scroll.ensureWidgetVisible(window.title_input)
+        app.processEvents()
+        bounds = QRect(window.title_input.mapTo(window.work_scroll.viewport(), QPoint()), window.title_input.size())
+        assert window.work_scroll.viewport().rect().intersects(bounds)
+
+
+def test_enlarged_text_keeps_actions_outside_scroll(window, app):
+    from PySide6.QtCore import QPoint, QRect
+    font = window.font()
+    font.setPointSizeF(font.pointSizeF() * 1.5)
+    window.setFont(font)
+    window.resize(853, 580)
+    app.processEvents()
+    window._arrange_output()
+    app.processEvents()
+    for widget in (window.export_button, window.status, window.format_combo, window.stem_input):
+        assert window.rect().contains(QRect(widget.mapTo(window, QPoint()), widget.size()))
+    assert window.work_scroll.verticalScrollBar().maximum() > 0
+
+
+def test_restore_large_offscreen_window_to_changed_monitor(window, app):
+    from PySide6.QtCore import QRect
+    window.resize(1500, 1000)
+    window.move(2400, 1400)
+    app.processEvents()
+    available = QRect(0, 0, 853, 620)
+    window._fit_to_screen(available)
+    app.processEvents()
+    wait(app, lambda: available.contains(window.frameGeometry()))
+    assert available.contains(window.frameGeometry())
+
+
 def test_output_replace_requires_explicit_choice(window,app,tmp_path,monkeypatch):
     from PySide6.QtWidgets import QFileDialog
     load(window,app,sample_paths(tmp_path))

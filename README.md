@@ -10,7 +10,7 @@ A private Steady State Studio desktop utility for turning local JPEG and PNG pho
 - Visible ordering with multi-row Up/Down, Remove and Clear; thumbnail list and full-sheet preview.
 - A4 or US Letter, portrait/landscape, rows/columns, millimetre margins/gaps, filename captions and optional sheet title.
 - Three print presets (12, 20, or 6 photos); last layout/export choices and window arrangement are remembered locally.
-- Resizable table/preview split, page navigation and a scrollable full-resolution Zoom preview.
+- Resizable table/preview split, page navigation and a scrollable full-resolution Zoom preview. Short work areas scroll independently while export and status stay visible; output controls stack in narrow windows, and restored windows fit the available monitor.
 - Multipage PDF or numbered JPEG sheets at 150, 200 or 300 dpi. Photos always fit without cropping; EXIF rotation is honoured.
 - System/Dark/Light appearance, keyboard shortcuts, readable focus borders and accessible control labels.
 - Background import, preview and export with cancellation. Close during work asks first and waits for safe cleanup.
@@ -75,7 +75,7 @@ On Windows set `QT_QPA_PLATFORM=offscreen` in the environment if you want headle
 
 ## Windows and Linux build workflow
 
-`.github/workflows/build.yml` runs on pushes, pull requests and manual dispatch. It installs the exact dependency lock, runs the complete suite on Windows Server 2022 and Ubuntu 22.04, builds native packages, and smoke-tests the actual packaged executables. Linux also smoke-tests the AppImage without requiring FUSE.
+`.github/workflows/build.yml` runs on pushes, pull requests and manual dispatch. It installs the exact dependency lock, runs the complete suite on Windows Server 2022 and Ubuntu 22.04, builds native packages, and smoke-tests the actual packaged executables. Linux also smoke-tests the AppImage without requiring FUSE. A separate Ubuntu 24.04 job downloads and verifies the exact Ubuntu 22.04 package bytes, then exercises both the extracted bundle and AppImage.
 
 Download successful private artifacts from the repository's Actions run:
 - `Contact-Sheet-Maker-Windows-<commit>` contains the portable Windows ZIP.
