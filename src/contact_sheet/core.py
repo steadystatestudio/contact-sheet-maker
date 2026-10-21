@@ -120,11 +120,21 @@ def _natural_key(path: Path) -> tuple:
                  for part in re.split(r"(\d+)", str(path)))
 
 
+class CollectedPaths(list):
+    """Supported paths plus unique unsupported files skipped during collection."""
+
+    def __init__(self, paths, unsupported_paths=()):
+        super().__init__(paths)
+        self.unsupported_paths = tuple(unsupported_paths)
+
+
 def collect_paths(paths: Iterable[Path], recursive: bool = False,
                   cancel: threading.Event | None = None) -> list[Path]:
     """Expand folders naturally, preserve explicitly selected order, deduplicate."""
     result: list[Path] = []
+    unsupported: list[Path] = []
     seen: set[str] = set()
+    unsupported_seen: set[str] = set()
     for item in paths:
         _check_cancel(cancel)
         path = Path(item).expanduser()
@@ -135,7 +145,7 @@ def collect_paths(paths: Iterable[Path], recursive: bool = False,
             found = []
             for child in candidates:
                 _check_cancel(cancel)
-                if child.is_file() and child.suffix.casefold() in SUPPORTED_EXTENSIONS:
+                if child.is_file():
                     found.append(child)
             candidates = sorted(found, key=lambda p: (_natural_key(p.relative_to(path)), str(p)))
         elif path.is_file():
@@ -145,13 +155,23 @@ def collect_paths(paths: Iterable[Path], recursive: bool = False,
         for candidate in candidates:
             _check_cancel(cancel)
             if candidate.suffix.casefold() not in SUPPORTED_EXTENSIONS:
+                # Unsupported sidecars may vanish or become unreadable while
+                # enumerating a folder. Counting a skip must not discard photos.
+                try:
+                    resolved = candidate.resolve(strict=False)
+                except (OSError, RuntimeError):
+                    resolved = candidate.absolute()
+                key = os.path.normcase(str(resolved))
+                if key not in unsupported_seen:
+                    unsupported_seen.add(key)
+                    unsupported.append(resolved)
                 continue
             resolved = candidate.resolve(strict=True)
             key = os.path.normcase(str(resolved))
             if key not in seen:
                 seen.add(key)
                 result.append(resolved)
-    return result
+    return CollectedPaths(result, unsupported)
 
 
 def _stat_signature(value: os.stat_result) -> tuple[int, ...]:
@@ -580,7 +600,8 @@ class ExportedPaths(list):
 def export_sheets(photos: list[Photo], settings: SheetSettings, destination: Path,
                   stem: str = "contact-sheet", format: str = "PDF", overwrite: bool = False,
                   cancel: threading.Event | None = None,
-                  progress: Callable[[int, int], None] | None = None) -> list[Path]:
+                  progress: Callable[[int, int], None] | None = None,
+                  phase: Callable[[str], None] | None = None) -> list[Path]:
     """Render all pages before committing; preserve originals and existing exports."""
     settings.validate()
     if not isinstance(overwrite, bool):
@@ -600,6 +621,8 @@ def export_sheets(photos: list[Photo], settings: SheetSettings, destination: Pat
     staged = [stage_dir / path.name for path in outputs]
     total = settings.page_count(len(photos))
     try:
+        if phase:
+            phase("rendering")
         if format.upper() == "PDF":
             from reportlab.pdfgen import canvas
             width_mm, height_mm = settings.page_mm()
@@ -632,7 +655,11 @@ def export_sheets(photos: list[Photo], settings: SheetSettings, destination: Pat
                 if progress:
                     progress(page_index + 1, total)
         _check_cancel(cancel)
+        if phase:
+            phase("checking")
         _verify_sources(photos, cancel)
+        if phase:
+            phase("committing")
         retained = _commit_outputs(staged, outputs, snapshots, photos, cancel)
         return ExportedPaths(outputs, retained)
     finally:
