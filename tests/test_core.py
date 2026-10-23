@@ -153,16 +153,14 @@ def test_corrupt_png_crc_rejected(make_photo):
 
 def test_unicode_and_long_names_render(make_photo, settings):
     photo = make_photo("長い名前-été-Δοκιμή-" + "abcdefghij" * 12 + ".png")
-    settings = replace(settings, title="Sélection — 撮影", rows=2, columns=2)
+    settings = replace(settings, title="Sélection — 撮影", rows=2, columns=1)
     image = render_page([photo], settings, 0)
     assert image.mode == "RGB"
     assert image.size == settings.page_pixels()
     image.close()
-    font = core._text_font(photo.path.name, 12)
-    truncated = core._ellipsize(photo.path.name, font, 110)
-    assert "…" in truncated
-    assert truncated.endswith(".png")
-    assert font.getlength(truncated) <= 110
+    lines = core._caption_lines(photo.path.name, core._caption_width_mm(settings))
+    assert "".join(lines) == photo.path.name
+    assert len(lines) == 2
 
 
 def test_render_preserves_full_aspect_without_cropping(make_photo, settings):
@@ -849,3 +847,72 @@ def test_unresolvable_unsupported_sibling_does_not_discard_supported_photos(make
     found = collect_paths([photo.path.parent])
     assert found == [photo.path]
     assert found.unsupported_paths == (sidecar,)
+
+
+@pytest.mark.parametrize("dpi", [90, 150, 200, 300])
+def test_two_line_captions_preserve_names_and_physical_metrics(make_photo, monkeypatch, dpi):
+    from PIL import ImageDraw
+    filename = "portrait-study-session-2026-October-selected-01.png"
+    photo = make_photo(filename)
+    settings = SheetSettings(dpi=200)
+    drawn = []
+    original = ImageDraw.ImageDraw.text
+    def record(draw, xy, text, *args, **kwargs):
+        font = kwargs.get("font")
+        if font is not None and font.size == core.CAPTION_SIZE:
+            box = draw.textbbox(xy, text, font=font)
+            drawn.append((text, box, draw._image.size))
+        return original(draw, xy, text, *args, **kwargs)
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", record)
+    page = render_page([photo], settings, 0, dpi=dpi)
+    try:
+        assert [text for text, _, _ in drawn] == [
+            "portrait-study-session-", "2026-October-selected-01.png"]
+        assert "".join(text for text, _, _ in drawn) == filename
+        for _, box, (width, height) in drawn:
+            assert 0 <= box[0] < box[2] <= width
+            assert 0 <= box[1] < box[3] <= height
+            assert height / core.CAPTION_DPI * 25.4 == pytest.approx(9, abs=.02)
+        assert core.CAPTION_SIZE / core.CAPTION_DPI * 72 == 8
+    finally:
+        page.close()
+
+
+@pytest.mark.parametrize("format", ["PDF", "JPEG"])
+def test_later_page_caption_overflow_rejects_before_any_output_mutation(make_photo, tmp_path, monkeypatch, format):
+    photos = [make_photo(f"photo-{i}.png") for i in range(12)]
+    photos.append(make_photo("W" * 115 + ".png"))
+    settings = SheetSettings()
+    output = tmp_path / "sheets"
+    output.mkdir()
+    previous = output / ("contact-sheet.pdf" if format == "PDF" else "contact-sheet-001.jpg")
+    previous.write_bytes(b"previous export")
+    source_hashes = {photo.path: digest(photo.path) for photo in photos}
+    def no_stage(*args, **kwargs):
+        raise AssertionError("Caption preflight must finish before creating output staging")
+    monkeypatch.setattr(core.tempfile, "mkdtemp", no_stage)
+    with pytest.raises(core.CaptionLayoutError, match="page 2") as error:
+        export_sheets(photos, settings, output, format=format, overwrite=True)
+    assert "fewer columns" in str(error.value)
+    assert "Filename captions" in str(error.value)
+    assert previous.read_bytes() == b"previous export"
+    assert list(output.iterdir()) == [previous]
+    assert source_hashes == {photo.path: digest(photo.path) for photo in photos}
+    core.validate_captions(photos, replace(settings, columns=1))
+    core.validate_captions(photos, replace(settings, captions=False))
+
+
+def test_caption_wrap_preserves_combining_characters_and_extension():
+    name = ("e\u0301tude-" * 8) + "final.png"
+    lines = core._caption_lines(name, 60)
+    assert len(lines) == 2
+    assert "".join(lines) == name
+    assert not lines[1].startswith("\u0301")
+    assert lines[-1].endswith(".png")
+
+
+def test_caption_preflight_can_be_cancelled(make_photo):
+    cancel = threading.Event()
+    cancel.set()
+    with pytest.raises(ExportCancelled):
+        core.validate_captions([make_photo()], SheetSettings(), cancel)

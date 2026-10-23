@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox, QDialog
 from PySide6.QtGui import QDesktopServices
 from PIL import Image
 import pytest
-from contact_sheet.gui import MainWindow, SettingsDialog, DONATE_URL
+from contact_sheet.gui import MainWindow, SettingsDialog, SUPPORT_URL
 from contact_sheet.core import inspect_photo, ExportCancelled
 
 @pytest.fixture(scope="session")
@@ -140,6 +140,7 @@ def test_cancel_operation_does_not_commit(window,app,tmp_path,monkeypatch):
 
 def test_settings_cancel_and_apply(window,app,monkeypatch):
     def reject(dialog):
+        assert [dialog.theme.itemText(i) for i in range(dialog.theme.count())] == ["System", "Light", "Dark"]
         dialog.theme.setCurrentText("Dark")
         return QDialog.Rejected
     monkeypatch.setattr(SettingsDialog,"exec",reject)
@@ -155,12 +156,13 @@ def test_settings_cancel_and_apply(window,app,monkeypatch):
     saved.close()
 
 
-def test_donate_only_explicit_click(window,monkeypatch):
+def test_support_only_explicit_click(window,monkeypatch):
     urls=[]
     monkeypatch.setattr(QDesktopServices,"openUrl",lambda url:urls.append(url.toString()) or True)
     assert urls==[]
-    window.donate_button.click()
-    assert urls==[DONATE_URL]
+    assert window.support_button.text() == "Support"
+    window.support_button.click()
+    assert urls==[SUPPORT_URL]
 
 
 def test_busy_close_no_then_yes(window,app,tmp_path,monkeypatch):
@@ -266,8 +268,11 @@ def test_preview_gates_export(window,app,tmp_path):
     window.rows.setValue(5)
     assert not window.export_button.isEnabled()
     assert 'preview' in window.export_button.toolTip()
+    assert 'preview' in window.export_reason.text()
+    assert window.export_reason.isVisible()
     wait(app,lambda:window.preview_task is None and not window.preview_pending)
     assert window.export_button.isEnabled()
+    assert window.export_reason.text() == "Ready to export every sheet."
 
 
 def test_zoom_is_dismissible_and_preserves_page(window,app,tmp_path):
@@ -675,3 +680,58 @@ def test_cancel_during_export_phase_ignores_queued_updates_and_retains_old_file(
     assert not list(destination.glob(".contact-sheet-*"))
     assert window.export_button.isEnabled()
     assert not window.last_outputs
+
+
+@pytest.mark.parametrize("recovery", ["columns", "captions"])
+def test_later_page_caption_error_disables_export_and_recovers_automatically(window, app, tmp_path, recovery):
+    paths = sample_paths(tmp_path, 12)
+    long_name = tmp_path / ("W" * 115 + ".png")
+    Image.new("RGB", (40, 30), "green").save(long_name)
+    load(window, app, paths + [long_name])
+    assert window.page_index == 0
+    assert not window.export_button.isEnabled()
+    assert not window.preview_ready
+    assert "page 2" in window.export_reason.text()
+    assert "fewer columns" in window.export_reason.text()
+    assert long_name.name in window.preview.message
+    assert window.status.text() == "Added 13 photos."
+    if recovery == "columns":
+        window.columns.setValue(1)
+    else:
+        window.captions.setChecked(False)
+    wait(app, lambda: not window.preview_pending and window.preview_task is None)
+    assert window.export_button.isEnabled()
+    assert window.preview_ready and not window.preview.pixmap.isNull()
+    assert window.export_reason.text() == "Ready to export every sheet."
+
+
+def test_invalid_layout_reason_preserves_last_export_receipt(window, app, tmp_path):
+    load(window, app, sample_paths(tmp_path, 1))
+    window.start_export(tmp_path, "successful", "PDF")
+    wait(app, lambda: not window.busy)
+    receipt = window.status.text()
+    assert receipt.startswith("Saved 1 file")
+    window.rows.setValue(12)
+    window.margin.setValue(50)
+    window.gap.setValue(30)
+    assert not window.export_button.isEnabled()
+    assert "too little room" in window.export_reason.text()
+    assert window.export_reason.isVisible()
+    assert window.status.text() == receipt
+    assert window.open_folder_button.isVisible()
+
+
+def test_import_details_include_every_failure_beyond_one_hundred(window, app, tmp_path, monkeypatch):
+    paths = sample_paths(tmp_path, 1)
+    for index in range(125):
+        broken = tmp_path / f"broken-{index:03d}.png"
+        broken.write_bytes(b"not an image")
+        paths.append(broken)
+    details = []
+    monkeypatch.setattr(QMessageBox, "exec", lambda box: details.append(box.detailedText()) or QMessageBox.Ok)
+    load(window, app, paths)
+    assert len(details) == 1
+    assert len(details[0].splitlines()) == 125
+    assert all(path.name in details[0] for path in paths[1:])
+    assert "125 could not be loaded." in window.status.text()
+    assert window.export_button.isEnabled()

@@ -15,6 +15,7 @@ import stat
 import tempfile
 import threading
 from typing import Callable, Iterable
+import unicodedata
 import warnings
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
@@ -22,6 +23,9 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
 
 _WINDOWS = os.name == "nt"
 MAX_IMAGE_PIXELS = 60_000_000
+CAPTION_HEIGHT_MM = 9.0
+CAPTION_DPI = 720
+CAPTION_SIZE = 8 * CAPTION_DPI // 72
 SUPPORTED_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png"})
 PAGE_SIZES_MM = {"A4": (210.0, 297.0), "A3": (297.0, 420.0),
                  "Letter": (215.9, 279.4), "Legal": (215.9, 355.6)}
@@ -29,6 +33,15 @@ PAGE_SIZES_MM = {"A4": (210.0, 297.0), "A3": (297.0, 420.0),
 
 class ExportCancelled(RuntimeError):
     """The user cancelled; no partial export is intentionally retained."""
+
+
+class CaptionLayoutError(ValueError):
+    """A complete filename cannot fit the chosen sheet layout."""
+
+    def __init__(self, filename: str, page: int):
+        self.summary = (f"A filename on page {page} does not fit. Use fewer columns, "
+                        "landscape, smaller margins/gaps, or turn off Filename captions.")
+        super().__init__(f"{self.summary}\nFilename: {filename}")
 
 
 CancelledError = ExportCancelled
@@ -101,7 +114,7 @@ class SheetSettings:
         footer = 8.0
         tile_w = (width - self.margin_mm * 2 - self.gap_mm * (self.columns - 1)) / self.columns
         tile_h = (height - self.margin_mm * 2 - header - footer - self.gap_mm * (self.rows - 1)) / self.rows
-        image_h = tile_h - (7.0 if self.captions else 0.0)
+        image_h = tile_h - (CAPTION_HEIGHT_MM if self.captions else 0.0)
         if tile_w < 8 or image_h < 8:
             raise ValueError("This grid leaves too little room for photos. Reduce rows, columns, margins, or spacing.")
 
@@ -316,6 +329,85 @@ def _draw_centered(draw, text: str, center_x: float, top: float, width: int,
               text, font=font, fill=fill)
 
 
+def _caption_width_mm(settings: SheetSettings) -> float:
+    return (settings.page_mm()[0] - 2 * settings.margin_mm
+            - (settings.columns - 1) * settings.gap_mm) / settings.columns
+
+
+@lru_cache(maxsize=4096)
+def _caption_lines(filename: str, width_mm: float) -> tuple[str, ...]:
+    """Wrap without dropping characters, using the same metrics at every DPI."""
+    text = _clean_text(filename)
+    font = _text_font(text, CAPTION_SIZE)
+    # Half a millimetre on each side keeps antialiased edges inside the cell.
+    width = (width_mm - 1.0) * CAPTION_DPI / 25.4
+    def fits(line):
+        box = font.getbbox(line)
+        return max(font.getlength(line), box[2] - box[0]) <= width
+    def fits_band(lines):
+        line_height = sum(font.getmetrics())
+        limit = CAPTION_HEIGHT_MM * CAPTION_DPI / 25.4
+        return all(CAPTION_DPI / 25.4 + index * line_height
+                   + font.getbbox(line)[3] - font.getbbox(line)[1] <= limit
+                   for index, line in enumerate(lines))
+    if fits(text) and fits_band((text,)):
+        return (text,)
+    # Keep combining marks, variation selectors and joined sequences together.
+    breaks = [i for i in range(1, len(text))
+              if not unicodedata.category(text[i]).startswith("M")
+              and text[i] != "\u200d" and text[i - 1] != "\u200d"]
+    # Prefer a separator near the middle, then any balanced character break.
+    breaks.sort(key=lambda i: (text[i - 1] not in " _-", abs(i - len(text) / 2)))
+    for index in breaks:
+        if fits(text[:index]) and fits(text[index:]) and fits_band((text[:index], text[index:])):
+            return text[:index], text[index:]
+    raise ValueError("The filename needs more than two caption lines.")
+
+
+def validate_captions(photos: list[Photo], settings: SheetSettings,
+                      cancel: threading.Event | None = None) -> None:
+    """Preflight every filename before preview readiness or output staging."""
+    settings.validate()
+    if not settings.captions:
+        return
+    width_mm = _caption_width_mm(settings)
+    for index, photo in enumerate(photos):
+        _check_cancel(cancel)
+        try:
+            _caption_lines(photo.path.name, width_mm)
+        except ValueError as exc:
+            raise CaptionLayoutError(photo.path.name, index // settings.per_page + 1) from exc
+
+
+def _draw_caption(page: Image.Image, filename: str, width_mm: float,
+                  left: float, top: float, resolution: int) -> None:
+    """Scale one reference rendering so wrapping and 8 pt sizing stay consistent."""
+    lines = _caption_lines(filename, width_mm)
+    font = _text_font(_clean_text(filename), CAPTION_SIZE)
+    scale = CAPTION_DPI / 25.4
+    band = Image.new("RGB", (max(1, round(width_mm * scale)),
+                             round(CAPTION_HEIGHT_MM * scale)), "white")
+    try:
+        draw = ImageDraw.Draw(band)
+        ascent, descent = font.getmetrics()
+        line_height = ascent + descent
+        y = round(scale)  # One millimetre between the photo and caption.
+        for line in lines:
+            box = draw.textbbox((0, 0), line, font=font)
+            draw.text(((band.width - (box[2] - box[0])) / 2 - box[0], y - box[1]),
+                      line, font=font, fill="#333333")
+            y += line_height
+        output = band.resize((max(1, round(width_mm * resolution / 25.4)),
+                              max(1, round(CAPTION_HEIGHT_MM * resolution / 25.4))),
+                             Image.Resampling.LANCZOS)
+        try:
+            page.paste(output, (round(left), round(top)))
+        finally:
+            output.close()
+    finally:
+        band.close()
+
+
 def render_page(photos: list[Photo], settings: SheetSettings, page_index: int,
                 dpi: int | None = None, cancel: threading.Event | None = None) -> Image.Image:
     settings.validate()
@@ -331,9 +423,10 @@ def render_page(photos: list[Photo], settings: SheetSettings, page_index: int,
         scale = resolution / 25.4
         margin, gap = settings.margin_mm * scale, settings.gap_mm * scale
         header, footer = (12.0 * scale if settings.title.strip() else 0), 8.0 * scale
-        caption_h = 7.0 * scale if settings.captions else 0
-        tile_w = (width - 2 * margin - (settings.columns - 1) * gap) / settings.columns
-        tile_h = (height - 2 * margin - header - footer - (settings.rows - 1) * gap) / settings.rows
+        caption_h = CAPTION_HEIGHT_MM * scale if settings.captions else 0
+        tile_w = _caption_width_mm(settings) * scale
+        tile_h = (settings.page_mm()[1] * scale - 2 * margin - header - footer
+                  - (settings.rows - 1) * gap) / settings.rows
         image_h = tile_h - caption_h
         if settings.title.strip():
             _draw_centered(draw, settings.title.strip(), width / 2, margin,
@@ -341,6 +434,11 @@ def render_page(photos: list[Photo], settings: SheetSettings, page_index: int,
         first = page_index * settings.per_page
         for offset, photo in enumerate(photos[first:first + settings.per_page]):
             _check_cancel(cancel)
+            if settings.captions:
+                try:
+                    _caption_lines(photo.path.name, _caption_width_mm(settings))
+                except ValueError as exc:
+                    raise CaptionLayoutError(photo.path.name, page_index + 1) from exc
             row, column = divmod(offset, settings.columns)
             left, top = margin + column * (tile_w + gap), margin + header + row * (tile_h + gap)
             image, dimensions, _ = _load_photo(photo.path, (max(1, math.floor(tile_w)), max(1, math.floor(image_h))),
@@ -362,9 +460,8 @@ def render_page(photos: list[Photo], settings: SheetSettings, page_index: int,
             finally:
                 image.close()
             if settings.captions:
-                _draw_centered(draw, photo.path.name, left + tile_w / 2,
-                               top + image_h + 1.5 * scale, math.floor(tile_w),
-                               max(8, round(8 * resolution / 72)))
+                _draw_caption(page, photo.path.name, _caption_width_mm(settings),
+                              left, top + image_h, resolution)
         _draw_centered(draw, f"Page {page_index + 1} of {pages}", width / 2,
                        height - margin - 4.5 * scale, round(width - 2 * margin),
                        max(8, round(8 * resolution / 72)), "#666666")
@@ -612,6 +709,7 @@ def export_sheets(photos: list[Photo], settings: SheetSettings, destination: Pat
         raise ValueError("Choose an existing destination folder.")
     photos = list(photos)
     outputs = output_paths(len(photos), settings, destination, stem, format)
+    validate_captions(photos, settings, cancel)
     _protect_sources(photos, outputs)
     snapshots = [_snapshot(path) for path in outputs]
     conflicts = [path.name for path, snapshot in zip(outputs, snapshots) if snapshot is not None]

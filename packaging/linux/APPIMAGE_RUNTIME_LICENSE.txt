@@ -34,3 +34,13 @@ the following terms:
   https://github.com/facebook/zstd/blob/dev/LICENSE
 * zlib, licensed under the terms of
   https://zlib.net/zlib_license.html
+* mimalloc, licensed under the MIT license:
+  https://github.com/microsoft/mimalloc/blob/v2.1.7/LICENSE
+
+Complete dependency license texts are retained in licenses/appimage/.
+The pinned runtime source and its libfuse patch, libfuse 3.15.0 source and
+squashfuse 0.5.2 source are retained as assets alongside every published beta.
+See SOURCE-INDEX.json for exact archive hashes and upstream URLs.
+The upstream runtime build uses Alpine 3.21 system packages for musl, zstd,
+zlib and mimalloc; the upstream release does not expose their exact build
+package revisions. No byte-reproducible runtime-build claim is made here.

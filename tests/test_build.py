@@ -308,24 +308,21 @@ def test_archives_contain_only_native_bundle_and_checksums(tmp_path, target_plat
     assert line == f"{hashlib.sha256(archive.read_bytes()).hexdigest()}  {archive.name}"
 
 
-def test_ci_uses_verified_action_pins_and_private_artifact_contract():
+def test_ci_uses_verified_action_pins_without_release_or_artifact_storage():
     workflow = (ROOT / ".github/workflows/build.yml").read_text()
     actions = re.findall(r"uses: (\S+)", workflow)
     assert set(actions) == {
         "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
         "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
-        "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
-        "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
     }
     assert "contents: read" in workflow and "contents: write" not in workflow
     assert "persist-credentials: false" in workflow and "fail-fast: false" in workflow
     assert "windows-2022" in workflow and "ubuntu-22.04" in workflow
-    assert "ubuntu-24.04" in workflow and "needs: build" in workflow
-    assert "sha256sum -c SHA256SUMS.txt" in workflow
     assert "PYTEST_DISABLE_PLUGIN_AUTOLOAD" in workflow and "QT_QPA_PLATFORM: offscreen" in workflow
     assert "--junitxml=artifacts/test-results.xml" in workflow
     assert "APPIMAGE_EXTRACT_AND_RUN=1 python scripts/smoke_bundle.py" in workflow
-    assert "retention-days: 14" in workflow and "BUILD_SOURCE_COMMIT" in workflow
+    assert "upload-artifact" not in workflow and "download-artifact" not in workflow
+    assert "BUILD_SOURCE_COMMIT" in workflow
     assert "--no-deps --no-build-isolation -e ." in workflow
     assert "timeout-minutes:" in workflow
     assert "pull_request_target" not in workflow and "gh release" not in workflow

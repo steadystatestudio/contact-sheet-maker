@@ -1,0 +1,60 @@
+CONTACT SHEET MAKER: OPEN-SOURCE LIBRARIES AND REPLACEMENT
+
+Contact Sheet Maker uses PySide6, Shiboken6 and Qt under their LGPLv3
+alternative. The complete LGPLv3 and GPLv3 texts are in licenses/. You may
+modify and replace these libraries and reverse engineer this application
+for debugging those modifications. The application imposes no additional
+restriction on those rights. Its own source is MIT-licensed.
+
+Matching source
+--------------
+Every published beta must retain all archives named in SOURCE-INDEX.json
+as downloadable assets on the SAME GitHub release as the binary packages:
+https://github.com/steadystatestudio/contact-sheet-maker/releases
+The index gives exact versions, official upstream URLs, sizes and SHA-256
+digests. The complete Qt archive includes its submodules and third-party
+source/notices; pyside-setup includes PySide, Shiboken and their build scripts.
+These are unmodified upstream sources. BUILD-INFO.json records the actual
+runtime versions and source revision; LICENSE-INDEX.json lists the retained
+notice files. The release source archives do not need to be downloaded to
+run the application. Preserve source availability while distributing binaries.
+
+Using compatible modified libraries
+----------------------------------
+1. Work on a copy of the extracted portable package. Keep its original copy.
+   For AppImage, run ./Contact-Sheet-Maker-x86_64.AppImage --appimage-extract
+   and work inside squashfs-root/usr/lib/contact-sheet-maker. Run the modified
+   copy through squashfs-root/AppRun, not the original compressed AppImage.
+2. Build the modified Qt/PySide/Shiboken versions for the same architecture,
+   Python ABI and platform toolchain as recorded in BUILD-INFO.json. The
+   supplied source archives contain build instructions. Qt and the bindings
+   must remain ABI-compatible with each other. Official build references:
+   https://doc.qt.io/qt-6/build-sources.html
+   https://doc.qt.io/qtforpython-6/building_from_source/index.html
+3. Replace the corresponding separate shared libraries and plugins under
+   _internal/PySide6 and _internal/shiboken6, preserving their relative paths.
+   Windows Qt DLLs are normally under _internal/PySide6; Linux libraries are
+   normally under _internal/PySide6/Qt/lib. Replace dependent plugins as a
+   compatible set. NATIVE-LIBRARIES.json records the exact bundled paths.
+4. Launch the copied executable normally. There is no signature enforcement,
+   library hash enforcement or download requirement inside this application.
+   Test imports, preview and PDF/JPEG export with non-sensitive sample files.
+   If an ABI change prevents loading, rebuild the MIT application from its
+   source with your modified compatible dependencies and scripts/build.py.
+
+Package checksums authenticate the original downloads; modifying libraries
+will naturally change those checksums. Keeping libraries separate enables
+replacement; it is not a claim that arbitrary binary versions interoperate.
+
+Replacing the AppImage runtime's static LGPL libfuse
+-------------------------------------------------
+The retained type2-runtime source includes the Makefile, build scripts and
+the patch applied to libfuse 3.15.0. Its matching libfuse and squashfuse source
+archives are supplied beside it. Build your modified runtime using that source
+and its documented Linux build environment. The runtime is MIT-licensed; its
+complete source can be rebuilt/relinked with a modified libfuse. Extract the
+application AppDir, then use appimagetool --runtime-file YOUR-RUNTIME AppDir
+modified.AppImage to package it. No application restriction prevents running
+this modified AppImage. Alternatively run the extracted portable bundle without
+any AppImage runtime or libfuse. The upstream Alpine package versions were not
+fully pinned, so rebuilding is not promised to reproduce the original bytes.

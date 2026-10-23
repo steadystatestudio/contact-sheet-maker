@@ -43,6 +43,8 @@ def main():
             app.processEvents(); time.sleep(.01)
             if time.monotonic()>until: raise RuntimeError('Preview timed out')
         OUT.mkdir(exist_ok=True)
+        # Capture a useful desktop workspace even on the small offscreen test display.
+        w.resize(1280,900); app.processEvents()
         for theme in ['dark','light']:
             apply_theme(app,theme); app.processEvents(); w.grab().save(str(OUT/f'screenshot-{theme}.png'))
         w.resize(890,700); app.processEvents(); w.grab().save(str(OUT/'screenshot-compact.png'))

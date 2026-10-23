@@ -10,3 +10,11 @@ artifacts/
 # Reproducible generated examples and test output are delivered separately.
 docs/sample-export/
 docs/test-results.xml
+
+# Studio website is maintained in its own Sites repository.
+website/
+
+release-sources/
+release-stage/
+release-final/
+candidate/

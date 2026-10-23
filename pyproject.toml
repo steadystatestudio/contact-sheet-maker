@@ -4,12 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "steady-contact-sheet"
-version = "0.1.0"
-description = "Private, offline contact sheets from Steady State Studio"
+version = "0.1.0b1"
+description = "Free, offline contact sheets from Steady State Studio"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{name = "Steady State Studio"}]
 dependencies = ["PySide6>=6.8,<7", "Pillow>=11,<13", "reportlab>=4.4,<6"]
+
+[project.urls]
+Homepage = "https://steady-state-studio.rpxjjnqmguarhzkg.chatgpt.site/apps/contact-sheet-maker/"
+Repository = "https://github.com/steadystatestudio/contact-sheet-maker"
+Issues = "https://github.com/steadystatestudio/contact-sheet-maker/issues"
+Support = "https://steady-state-studio.rpxjjnqmguarhzkg.chatgpt.site/support/"
 
 [project.optional-dependencies]
 test = ["pytest>=8", "pypdf>=5"]

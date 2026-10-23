@@ -1,4 +1,4 @@
-Contact Sheet Maker: Linux x86-64 private test build
+Contact Sheet Maker: Linux x86-64 public beta
 
 AppImage:
   chmod +x Contact-Sheet-Maker-x86_64.AppImage
@@ -16,9 +16,11 @@ compatible Qt/X11 or Wayland system libraries are required for interactive
 use. An AppImage is not a guarantee of compatibility with every distribution.
 See BUILD-INFO.json for the actual build OS, Python and dependency versions.
 
-AppImages are unsigned private CI artifacts, not a public release.
+AppImages are unsigned. Verify SHA256SUMS-Linux.txt from the same release.
 The separate dynamic libraries may be replaced with compatible modified
 versions in the extracted one-folder bundle. To inspect the AppImage without
 installing it, run ./Contact-Sheet-Maker-x86_64.AppImage --appimage-extract.
 
 Original photographs are processed locally and never uploaded by this app.
+See LIBRARY-REPLACEMENT.txt, SOURCE-INDEX.json and licenses/ for matching
+library sources, complete notices and replacement/rebuild instructions.

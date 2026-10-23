@@ -1,4 +1,4 @@
-"""Build native private test packages on Windows or Linux x86-64.
+"""Build native portable beta packages on Windows or Linux x86-64.
 
 The AppDir layout follows Steady State Studio's MIT-licensed File Renamer:
 https://github.com/steadystatestudio/file-renamer/tree/342f2cebf672578ff27f299eda466da7c2df4b96
@@ -22,6 +22,7 @@ from pathlib import Path
 # Support both `python scripts/build.py` and import-based build tests.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fetch_appimagetool as appimage_inputs
+from fetch_release_sources import source_index
 
 ROOT = Path(__file__).resolve().parents[1]
 NAME = "Contact-Sheet-Maker"
@@ -103,6 +104,7 @@ def source_revision(root: Path) -> str:
 
 
 def write_build_info(root: Path, bundle: Path, target_platform: str) -> None:
+    from PySide6.QtCore import qVersion
     dependencies = {}
     for name in LICENSE_PACKAGES:
         dependencies[name] = metadata.version(name)
@@ -121,6 +123,7 @@ def write_build_info(root: Path, bundle: Path, target_platform: str) -> None:
         "platform": target_platform,
         "os": platform.platform(),
         "machine": platform.machine(),
+        "qt_runtime": qVersion(),
         "dependencies": dependencies,
         "source_sha256": source_hashes(root),
         "appimage_inputs": {
@@ -132,6 +135,12 @@ def write_build_info(root: Path, bundle: Path, target_platform: str) -> None:
 
 
 def copy_notices(root: Path, bundle: Path, target_platform: str) -> None:
+    from PySide6.QtCore import qVersion
+    index = source_index(root)
+    if qVersion() != index["qt_version"]:
+        raise RuntimeError("Qt runtime differs from retained source pins")
+    (bundle / "SOURCE-INDEX.json").write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
+    shutil.copy2(root / "packaging/LIBRARY-REPLACEMENT.txt", bundle / "LIBRARY-REPLACEMENT.txt")
     for name in ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "requirements-build-lock.txt"):
         shutil.copy2(root / name, bundle / name)
     if (root / "docs/VALIDATION.md").is_file():
@@ -156,7 +165,7 @@ def copy_notices(root: Path, bundle: Path, target_platform: str) -> None:
         distribution = metadata.distribution(name)
         for entry in distribution.files or []:
             relative = Path(entry)
-            if not any(word in str(relative).upper() for word in ("LICENSE", "COPYING", "NOTICE")):
+            if not any(word in str(relative).upper() for word in ("LICENSE", "COPYING", "NOTICE", "COPYRIGHT")):
                 continue
             source = Path(distribution.locate_file(entry))
             if source.is_file():
@@ -165,6 +174,17 @@ def copy_notices(root: Path, bundle: Path, target_platform: str) -> None:
                 target = licenses / name / Path(*safe_parts)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, target)
+    license_index = {}
+    for path in sorted(licenses.rglob("*")):
+        if path.is_file() and not path.is_symlink():
+            license_index[path.relative_to(bundle).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    (bundle / "LICENSE-INDEX.json").write_text(json.dumps(license_index, indent=2) + "\n", encoding="utf-8")
+    native_libraries = {}
+    for path in sorted((bundle / "_internal").rglob("*")):
+        if path.is_file() and (path.suffix.lower() in {".dll", ".pyd", ".dylib"} or ".so" in path.name):
+            with path.open("rb") as stream:
+                native_libraries[path.relative_to(bundle).as_posix()] = hashlib.file_digest(stream, "sha256").hexdigest()
+    (bundle / "NATIVE-LIBRARIES.json").write_text(json.dumps(native_libraries, indent=2) + "\n", encoding="utf-8")
     write_build_info(root, bundle, target_platform)
 
 

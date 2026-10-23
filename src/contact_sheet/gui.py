@@ -18,11 +18,13 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QSizePolicy, QSpinBox, QSplitter, QTableView, QVBoxLayout, QWidget,
 )
 
-from .core import Photo, SheetSettings, ExportCancelled, collect_paths, inspect_photo, render_page, export_sheets
+from . import __version__
+from .core import (Photo, SheetSettings, ExportCancelled, CaptionLayoutError,
+                   collect_paths, inspect_photo, render_page, export_sheets, validate_captions)
 from .themes import apply_theme
 from .widgets import FileProgressBar
 
-DONATE_URL = "https://ko-fi.com/steadystatestudio"
+SUPPORT_URL = "https://steady-state-studio.rpxjjnqmguarhzkg.chatgpt.site/support/"
 
 
 def visible_text(text: str) -> str:
@@ -141,7 +143,7 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(self)
         form = QFormLayout()
         self.theme = QComboBox()
-        self.theme.addItems(["System", "Dark", "Light"])
+        self.theme.addItems(["System", "Light", "Dark"])
         self.theme.setCurrentText(current.title())
         form.addRow("Appearance", self.theme)
         layout.addLayout(form)
@@ -167,6 +169,7 @@ class MainWindow(QMainWindow):
         self.preview_task: Task | None = None
         self.preview_pending = False
         self.preview_ready = False
+        self.preview_error = ""
         self.status_locked = False
         self.preview_revision = 0
         self.page_index = 0
@@ -216,9 +219,9 @@ class MainWindow(QMainWindow):
             toolbar.addWidget(widget)
         toolbar.addStretch()
         self.help_button = self._button("Help", self._help)
-        self.donate_button = self._button("Donate", self._open_donate, "Optional support on Ko-fi; every feature is free")
+        self.support_button = self._button("Support", self._open_support, "Open the Studio support page; every feature is free")
         self.settings_button = self._button("Settings", self._settings_dialog)
-        for widget in (self.help_button, self.donate_button, self.settings_button):
+        for widget in (self.help_button, self.support_button, self.settings_button):
             toolbar.addWidget(widget)
         layout.addLayout(toolbar)
 
@@ -360,6 +363,13 @@ class MainWindow(QMainWindow):
         self.export_button.setMinimumWidth(190)
         out.addWidget(self.export_button, 0, 1, Qt.AlignCenter)
         outer.addWidget(self.output_controls)
+        self.export_reason = QLabel()
+        self.export_reason.setObjectName("muted")
+        self.export_reason.setWordWrap(True)
+        self.export_reason.setTextFormat(Qt.PlainText)
+        self.export_reason.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.export_reason.setAccessibleName("Export availability")
+        outer.addWidget(self.export_reason)
         self._compact_output = None
         status_row = QHBoxLayout()
         self.status = FileProgressBar()
@@ -504,20 +514,26 @@ class MainWindow(QMainWindow):
         count = len(self.model.photos)
         self.count_label.setText(f"{count} photo{'s' if count != 1 else ''}")
         valid = True
+        layout_error = ""
         try:
             settings = self.sheet_settings(); settings.validate()
             pages = settings.page_count(count)
         except ValueError as exc:
             valid = False; pages = 0
-            self._set_status(str(exc))
+            layout_error = str(exc)
         self.page_index = max(0, min(self.page_index, max(0, pages - 1)))
         self.page_label.setText(f"Page {self.page_index + 1 if pages else 0} of {pages}")
         self.previous_button.setEnabled(pages > 0 and self.page_index > 0)
         self.next_button.setEnabled(pages > 0 and self.page_index < pages - 1)
         self.clear_button.setEnabled(bool(count) and not self.busy)
         self.export_button.setEnabled(bool(count) and valid and self.preview_ready and not self.busy)
-        reason = "Choose a destination and export every page" if self.export_button.isEnabled() else "Wait for the current operation" if self.busy else "Add photos first" if not count else "Fix the layout to export" if not valid else "Wait for the current preview to finish"
+        reason = ("Ready to export every sheet." if self.export_button.isEnabled()
+                  else "Wait for the current operation to finish." if self.busy
+                  else "Add photos to enable export." if not count
+                  else layout_error if not valid
+                  else self.preview_error or "Wait for the current preview to finish.")
         self.export_button.setToolTip(reason)
+        self.export_reason.setText(reason)
         self.zoom_button.setEnabled(self.preview_ready and not self.preview.pixmap.isNull())
         self._selection_changed()
         return valid
@@ -653,13 +669,12 @@ class MainWindow(QMainWindow):
             box = QMessageBox(QMessageBox.Warning, title,
                               " ".join(parts) + "\n\nChoose Show Details to see which files failed and why.", parent=self)
             box.setTextFormat(Qt.PlainText)
-            box.setDetailedText("\n".join(errors[:100]))
-            if len(errors) > 100:
-                box.setInformativeText("Details show the first 100 files that could not be loaded.")
+            box.setDetailedText("\n".join(errors))
             box.exec()
 
     def _schedule_preview(self):
         self.preview_ready = False
+        self.preview_error = ""
         self.status_locked = False
         self.preview_revision += 1
         self.preview_pending = True
@@ -681,6 +696,7 @@ class MainWindow(QMainWindow):
         revision = self.preview_revision
         photos = list(self.model.photos); settings = self.sheet_settings(); page_index = self.page_index
         def work(cancel, progress):
+            validate_captions(photos, settings, cancel)
             page = render_page(photos, settings, page_index, dpi=90, cancel=cancel)
             output = io.BytesIO(); page.save(output, format="PNG"); page.close()
             return output.getvalue()
@@ -712,6 +728,7 @@ class MainWindow(QMainWindow):
         if revision == self.preview_revision and not self.closing:
             self.preview.show_page(data)
             self.preview_ready = True
+            self.preview_error = ""
             self._refresh()
             if not self.busy and not self.status_locked:
                 settings = self.sheet_settings()
@@ -719,10 +736,11 @@ class MainWindow(QMainWindow):
 
     def _preview_failed(self, revision, exc):
         if revision == self.preview_revision and not isinstance(exc, ExportCancelled) and not self.closing:
-            self.preview.show_message("Preview unavailable.\nCheck the source photos.")
+            self.preview_error = (exc.summary if isinstance(exc, CaptionLayoutError)
+                                  else "Preview unavailable. Check the source photos.")
+            self.preview.show_message(str(exc))
             self.preview_ready = False
             self._refresh()
-            self._set_status(str(exc))
 
     def _preview_finished(self):
         task = self.preview_task; self.preview_task = None
@@ -887,9 +905,9 @@ class MainWindow(QMainWindow):
         if self.last_outputs:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.last_outputs[0].parent)))
 
-    def _open_donate(self):
-        if not QDesktopServices.openUrl(QUrl(DONATE_URL)):
-            QMessageBox.information(self, "Support Steady State Studio", f"You can support development at:\n{DONATE_URL}\n\nEvery feature is free.")
+    def _open_support(self):
+        if not QDesktopServices.openUrl(QUrl(SUPPORT_URL)):
+            QMessageBox.information(self, "Support Steady State Studio", f"Visit the Studio support page:\n{SUPPORT_URL}\n\nEvery feature is free.")
 
     def _settings_dialog(self):
         dialog = SettingsDialog(self.settings.value("theme", "system", type=str), self)
@@ -909,8 +927,9 @@ class MainWindow(QMainWindow):
                 "2. Select rows and use ↑ / ↓ to set the sheet order. Remove and Clear only change this list.\n\n"
                 "3. Choose a preset or adjust page size, orientation, grid, margins and gaps. The preview shows one full sheet; use ‹ / › to review every page.\n\n"
                 "4. Choose PDF or JPEG, resolution and a filename, then Export Sheets. JPEG creates numbered page files. Existing outputs require an explicit replacement choice.\n\n"
-                "Original photos are never modified. Everything runs on this computer, with no uploads or telemetry. Every feature is free; Donate opens the optional Studio Ko-fi page.\n\n"
-                "Contact Sheet Maker 0.1.0 · Steady State Studio")
+                "Original photos are never modified. Everything runs on this computer, with no uploads or telemetry. Every feature is free; Support opens the Studio support page.\n\n"
+                f"Contact Sheet Maker {__version__} · Public beta · Steady State Studio\n\n"
+                "Uses Qt/PySide6 under LGPLv3; see the bundled THIRD_PARTY_NOTICES.md and LIBRARY-REPLACEMENT.txt.")
         box = QMessageBox(QMessageBox.Information, "Contact Sheet Maker · Help", text, parent=self)
         box.setTextFormat(Qt.PlainText); box.exec()
 

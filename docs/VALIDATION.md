@@ -1,5 +1,7 @@
 # Validation record
 
+This is a **historical development record**. For the current public beta and its remaining verification limits, see [BETA-RELEASE.md](BETA-RELEASE.md) and the exact release's validation receipt.
+
 Build: Contact Sheet Maker 0.1.0, private development build, 2026-10-06.
 
 ## Passed on this environment
