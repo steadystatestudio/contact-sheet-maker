@@ -48,6 +48,14 @@ components if they reappear. Native desktop input methods and platform plugins
 are retained, except the unused VNC remote-display plugin; PDF/JPEG generation
 is provided by ReportLab/Pillow.
 
+Linux packages use PyInstaller's supported `Analysis.exclude_system_libraries`
+method to leave distribution-owned `/lib` and `/usr/lib` libraries on the host.
+`LINUX-SYSTEM-DEPENDENCIES.json` records the actual omitted library names and
+Ubuntu package owners without personal build paths. The package manager supplies
+those libraries and their notices/source availability. The unused Python
+readline module and GTK platform theme are excluded. Qt/PySide/Pillow wheel
+libraries and Python remain bundled and are covered by the retained notices.
+
 ## AppImage runtime
 
 The Linux AppImage embeds type2-runtime release 20251108, commit

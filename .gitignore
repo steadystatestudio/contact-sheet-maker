@@ -18,3 +18,4 @@ release-sources/
 release-stage/
 release-final/
 candidate/
+!packaging/Contact-Sheet-Maker.spec

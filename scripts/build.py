@@ -62,19 +62,12 @@ def icon_png(root: Path, target: Path) -> None:
 
 
 def pyinstaller_command(root: Path, target_platform: str) -> list[str]:
-    command = [
-        sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir", "--windowed",
-        "--noupx", "--name", NAME, "--paths", str(root / "src"), "--collect-data", "contact_sheet",
-        "--specpath", str(root / "build"), "--distpath", str(root / "dist"),
+    return [
+        sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean",
+        "--distpath", str(root / "dist"),
         "--workpath", str(root / "build/pyinstaller"),
-        "--additional-hooks-dir", str(root / "packaging/hooks"),
+        str(root / "packaging/Contact-Sheet-Maker.spec"),
     ]
-    for module in ("PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets", "PySide6.QtWebEngineQuick",
-                   "PySide6.QtNetwork", "PySide6.QtPdf", "PySide6.QtQml", "PySide6.QtQuick", "tkinter", "pytest"):
-        command.extend(["--exclude-module", module])
-    if target_platform == "win32":
-        command.extend(["--icon", str(root / "build/icon.png")])
-    return command + [str(root / "scripts/launcher.py")]
 
 
 def verify_qt_subset(bundle: Path) -> None:
@@ -165,6 +158,7 @@ def copy_notices(root: Path, bundle: Path, target_platform: str) -> None:
     shutil.copy2(root / readme, bundle / Path(readme).name)
     if target_platform == "linux":
         shutil.copy2(root / "packaging/linux/APPIMAGE_RUNTIME_LICENSE.txt", licenses / "APPIMAGE_RUNTIME_LICENSE.txt")
+        shutil.copy2(root / "build/LINUX-SYSTEM-DEPENDENCIES.json", bundle / "LINUX-SYSTEM-DEPENDENCIES.json")
     # Full Python license, not an unrelated OS interpreter's license.
     python_licenses = (Path(sys.base_prefix) / "LICENSE.txt", Path(sysconfig.get_path("stdlib")) / "LICENSE.txt")
     for source in python_licenses:
@@ -177,6 +171,8 @@ def copy_notices(root: Path, bundle: Path, target_platform: str) -> None:
         distribution = metadata.distribution(name)
         for entry in distribution.files or []:
             relative = Path(entry)
+            if relative.suffix in {".py", ".pyc", ".pyo"} or "__pycache__" in relative.parts:
+                continue
             if not any(word in str(relative).upper() for word in ("LICENSE", "COPYING", "NOTICE", "COPYRIGHT")):
                 continue
             source = Path(distribution.locate_file(entry))

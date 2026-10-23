@@ -187,13 +187,13 @@ def test_build_output_rejects_symlink_escape(tmp_path):
 def test_pyinstaller_native_command_paths_and_icon(tmp_path, target_platform):
     command = build.pyinstaller_command(tmp_path, target_platform)
     assert command[:3] == [sys.executable, "-m", "PyInstaller"]
-    assert "--onedir" in command and "--windowed" in command and "--noupx" in command
-    assert command[command.index("--specpath") + 1] == str(tmp_path / "build")
-    assert command[-1] == str(tmp_path / "scripts/launcher.py")
-    assert ("--icon" in command) == (target_platform == "win32")
-    assert "contact_sheet" in command
-    assert command[command.index("--additional-hooks-dir") + 1] == str(tmp_path / "packaging/hooks")
-    assert "PySide6.QtNetwork" in command
+    assert command[command.index("--distpath") + 1] == str(tmp_path / "dist")
+    assert command[command.index("--workpath") + 1] == str(tmp_path / "build/pyinstaller")
+    assert command[-1] == str(tmp_path / "packaging/Contact-Sheet-Maker.spec")
+    spec = (ROOT / "packaging/Contact-Sheet-Maker.spec").read_text()
+    assert 'console=False' in spec and 'upx=False' in spec and 'exclude_binaries=True' in spec
+    assert 'icon=[str(root / "build/icon.png")] if sys.platform == "win32" else None' in spec
+    assert 'collect_data_files("contact_sheet")' in spec and '"readline"' in spec
 
 
 @pytest.mark.parametrize("name", ["Qt6Pdf.dll", "libQt6Pdf.so.6", "Qt6VirtualKeyboard.dll",
@@ -210,11 +210,11 @@ def test_build_refuses_unreviewed_optional_qt_binaries(tmp_path, name):
 def test_gui_hook_removes_optional_plugins_but_preserves_native_input_methods(monkeypatch):
     from PyInstaller.utils.hooks import qt
     names = ["qpdf.dll", "libqpdf.so", "qtvirtualkeyboardplugin.dll", "libqtvirtualkeyboardplugin.so",
-             "qtuiotouchplugin.dll", "libqtuiotouchplugin.so", "qvnc.dll", "libqvnc.so", "libcomposeplatforminputcontextplugin.so",
+             "qtuiotouchplugin.dll", "libqtuiotouchplugin.so", "qvnc.dll", "libqvnc.so", "libqgtk3.so", "libcomposeplatforminputcontextplugin.so",
              "libibusplatforminputcontextplugin.so", "qwindows.dll", "qsvg.dll"]
     monkeypatch.setattr(qt, "add_qt6_dependencies", lambda path: ([], [(name, "plugins") for name in names], []))
     hook = runpy.run_path(str(ROOT / "packaging/hooks/hook-PySide6.QtGui.py"))
-    assert [entry[0] for entry in hook["binaries"]] == names[8:]
+    assert [entry[0] for entry in hook["binaries"]] == names[9:]
 
 
 def test_main_qt_hook_preserves_upstream_behavior_except_optional_mesa(monkeypatch):

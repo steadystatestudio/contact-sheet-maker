@@ -165,6 +165,7 @@ jobs:
         run: python scripts/release.py verify-linux --tag "$RELEASE_TAG" --commit "$BUILD_SOURCE_COMMIT" --tree "$BUILD_SOURCE_TREE" --release-id "$RELEASE_ID"
       - name: Smoke the retained Ubuntu 22.04 packages on Ubuntu 24.04
         run: |
+          python scripts/linux_dependencies.py candidate/Contact-Sheet-Maker/LINUX-SYSTEM-DEPENDENCIES.json
           chmod +x candidate/Contact-Sheet-Maker-x86_64.AppImage
           python scripts/smoke_bundle.py candidate/Contact-Sheet-Maker/Contact-Sheet-Maker --output-dir artifacts/smoke-ubuntu24-bundle
           APPIMAGE_EXTRACT_AND_RUN=1 python scripts/smoke_bundle.py candidate/Contact-Sheet-Maker-x86_64.AppImage --output-dir artifacts/smoke-ubuntu24-appimage
