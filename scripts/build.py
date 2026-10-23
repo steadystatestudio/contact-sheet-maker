@@ -83,7 +83,7 @@ def verify_qt_subset(bundle: Path) -> None:
     for path in (bundle / "_internal").rglob("*"):
         name = path.name.lower().removeprefix("lib")
         if path.is_file() and (name.startswith(excluded) or name == "opengl32sw.dll"
-                               or name.startswith(("qpdf.", "qtvirtualkeyboardplugin.", "qtuiotouchplugin."))):
+                               or name.startswith(("qpdf.", "qtvirtualkeyboardplugin.", "qtuiotouchplugin.", "qvnc."))):
             raise RuntimeError(f"Unreviewed optional Qt component in package: {path.name}")
 
 

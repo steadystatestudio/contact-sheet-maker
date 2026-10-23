@@ -45,7 +45,8 @@ that every optional Qt component is used by this application.
 Packaging excludes the unused Qt PDF, Virtual Keyboard, QML/Quick, WebEngine,
 networking and optional Mesa software OpenGL components. The build rejects these
 components if they reappear. Native desktop input methods and platform plugins
-are retained; PDF/JPEG generation is provided by ReportLab/Pillow.
+are retained, except the unused VNC remote-display plugin; PDF/JPEG generation
+is provided by ReportLab/Pillow.
 
 ## AppImage runtime
 

@@ -198,7 +198,7 @@ def test_pyinstaller_native_command_paths_and_icon(tmp_path, target_platform):
 
 @pytest.mark.parametrize("name", ["Qt6Pdf.dll", "libQt6Pdf.so.6", "Qt6VirtualKeyboard.dll",
                                  "libQt6Qml.so.6", "Qt6Quick.dll", "Qt6WebEngineCore.dll",
-                                 "libQt6Network.so.6", "opengl32sw.dll", "libqpdf.so"])
+                                 "libQt6Network.so.6", "opengl32sw.dll", "libqpdf.so", "libqvnc.so"])
 def test_build_refuses_unreviewed_optional_qt_binaries(tmp_path, name):
     internal = tmp_path / "_internal/PySide6"
     internal.mkdir(parents=True)
@@ -210,11 +210,11 @@ def test_build_refuses_unreviewed_optional_qt_binaries(tmp_path, name):
 def test_gui_hook_removes_optional_plugins_but_preserves_native_input_methods(monkeypatch):
     from PyInstaller.utils.hooks import qt
     names = ["qpdf.dll", "libqpdf.so", "qtvirtualkeyboardplugin.dll", "libqtvirtualkeyboardplugin.so",
-             "qtuiotouchplugin.dll", "libqtuiotouchplugin.so", "libcomposeplatforminputcontextplugin.so",
+             "qtuiotouchplugin.dll", "libqtuiotouchplugin.so", "qvnc.dll", "libqvnc.so", "libcomposeplatforminputcontextplugin.so",
              "libibusplatforminputcontextplugin.so", "qwindows.dll", "qsvg.dll"]
     monkeypatch.setattr(qt, "add_qt6_dependencies", lambda path: ([], [(name, "plugins") for name in names], []))
     hook = runpy.run_path(str(ROOT / "packaging/hooks/hook-PySide6.QtGui.py"))
-    assert [entry[0] for entry in hook["binaries"]] == names[6:]
+    assert [entry[0] for entry in hook["binaries"]] == names[8:]
 
 
 def test_main_qt_hook_preserves_upstream_behavior_except_optional_mesa(monkeypatch):
