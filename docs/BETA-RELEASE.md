@@ -20,7 +20,15 @@ On 2026-10-23, the changed beta source passed the complete integrated suite on W
 
 The suite covers complete caption wrapping at preview/export resolutions, rejection of an overflowing filename on a later page before output staging, automatic recovery after layout changes, preservation of export receipts, more than 100 import errors, and the draft-release validation gates. Source GUI smoke also passed: 13 synthetic Unicode-named inputs, two PDF pages and two JPEG sheets, with original input hashes unchanged. Refreshed light, dark and compact screenshots were inspected.
 
-These are Windows source/offscreen results. The changed beta's native package builds, packaged-executable/AppImage smoke checks and Ubuntu 24.04 verification of the exact retained Ubuntu 22.04 bytes are still pending. Record their exact release revision, checksums and workflow receipt before offering binary downloads. Historical baseline results do not validate the changed packages.
+The final release source is `f48da01185fcb7a756425d98e580bc8d800b1699` (tree `ff9c0411f778c02c4b063f87417d252c83a43a92`). [Release workflow 40002009253](https://github.com/steadystatestudio/contact-sheet-maker/actions/runs/40002009253) passed **269 tests, zero failures and zero skips on each of Windows Server 2022 and Ubuntu 22.04**. Native package builds and packaged-executable/AppImage smoke checks passed. Ubuntu 24.04 independently verified and ran the exact retained Ubuntu 22.04 tar bundle and AppImage with their declared desktop prerequisites installed. All five smoke checks exported 13 photos into two PDF pages and two JPEG sheets without changing original input hashes.
+
+The [published beta release](https://github.com/steadystatestudio/contact-sheet-maker/releases/tag/v0.1.0-beta.1) retains the exact packages, build information, checksums, synthetic QA and matching library source archives. Its `RELEASE-READY.json` records the automated draft-stage result; publication followed a review of source history, binary contents, screenshots, output metadata and package licenses. Linux packages use the host's system libraries, listed in their `LINUX-SYSTEM-DEPENDENCIES.json`. They are not fully self-contained distributions.
+
+| Download | SHA-256 |
+| --- | --- |
+| Windows ZIP | `217aa26ee37349d481d188432747bb143e3c48cfd1ebe5fe62f81692c0ff80c3` |
+| Linux tar.gz | `8544c06cba355eb393dacc12850646c005d7ec25b15be6eef994f53e185cef32` |
+| Linux AppImage | `f0abf53cd359bde90c2fd64db07817c9dcfdfff49e1ba7f6528240d893b28196` |
 
 ## Remaining real-device checks
 
