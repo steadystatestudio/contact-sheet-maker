@@ -34,15 +34,18 @@ class Task(QThread):
     result = Signal(object)
     failed = Signal(object)
     progress = Signal(int, int)
+    phase = Signal(str)
 
-    def __init__(self, work: Callable, parent=None):
+    def __init__(self, work: Callable, parent=None, *, phased=False):
         super().__init__(parent)
         self.work = work
+        self.phased = phased
         self.cancel = threading.Event()
 
     def run(self):
         try:
-            self.result.emit(self.work(self.cancel, self.progress.emit))
+            args = (self.cancel, self.progress.emit)
+            self.result.emit(self.work(*args, self.phase.emit) if self.phased else self.work(*args))
         except Exception as exc:
             self.failed.emit(exc)
 
@@ -594,6 +597,7 @@ class MainWindow(QMainWindow):
         existing = {os.path.normcase(str(photo.path.resolve())) for photo in self.model.photos}
         def work(cancel, progress):
             candidates, errors, seen = [], [], set()
+            unsupported = set()
             for item in paths:
                 try:
                     found = collect_paths([item], cancel=cancel)
@@ -602,6 +606,7 @@ class MainWindow(QMainWindow):
                 except (OSError, ValueError) as exc:
                     errors.append(f"{visible_text(Path(item).name)}: {exc}")
                     continue
+                unsupported.update(os.path.normcase(str(path)) for path in getattr(found, "unsupported_paths", ()))
                 for path in found:
                     key = os.path.normcase(str(path))
                     if key not in seen:
@@ -622,18 +627,20 @@ class MainWindow(QMainWindow):
                 progress(index + 1, len(candidates))
             if cancel.is_set():
                 raise ExportCancelled("Import cancelled")
-            return photos, errors, duplicates
+            return photos, errors, duplicates, len(unsupported)
         self._start_operation(work, self._import_done, "Adding photos…",
                               cancel_message="Import cancelled. The photo list is unchanged.")
 
     def _import_done(self, result):
-        photos, errors, duplicates = result
+        photos, errors, duplicates, unsupported = result
         if photos:
             self.model.reset(self.model.photos + photos)
             self._schedule_preview()
         parts = [f"Added {len(photos)} photo{'s' if len(photos) != 1 else ''}." if photos else "No photos added."]
         if duplicates:
             parts.append(f"{duplicates} already in the list.")
+        if unsupported and (photos or errors or duplicates):
+            parts.append(f"{unsupported} unsupported file{'s' if unsupported != 1 else ''} skipped (JPEG and PNG only).")
         if errors:
             parts.append(f"{len(errors)} could not be loaded.")
         if not photos and not errors and not duplicates:
@@ -732,10 +739,11 @@ class MainWindow(QMainWindow):
         self.page_index += delta
         self._schedule_preview()
 
-    def _start_operation(self, work, on_result, message, *, cancel_message="Cancelled. No new sheets were saved."):
+    def _start_operation(self, work, on_result, message, *, cancel_message="Cancelled. No new sheets were saved.", phased=False):
         if self.busy:
             return
         self.busy = True
+        self.operation_phased = phased
         self.operation_cancel_message = cancel_message
         self.status_locked = True
         if self.preview_task:
@@ -751,19 +759,35 @@ class MainWindow(QMainWindow):
         self.cancel_button.setEnabled(True); self.cancel_button.show()
         self._refresh()
         self.previous_button.setEnabled(False); self.next_button.setEnabled(False)
-        task = Task(work, self); self.task = task
+        task = Task(work, self, phased=phased); self.task = task
         task.result.connect(on_result)
         task.failed.connect(self._operation_failed)
         task.progress.connect(self._operation_progress)
+        task.phase.connect(self._operation_phase)
         task.finished.connect(self._operation_finished)
         task.start()
 
     def _operation_progress(self, done, total):
         if self.task and self.task.cancel.is_set():
             return  # Queued progress must not replace "Cancelling safely…".
-        self.progress.file_count = max(1, total)
-        self.progress.setRange(0, max(1, total)); self.progress.setValue(done)
-        self.progress.setFormat(f"{done} / {total} · Processing…")
+        # A rendered page is not a committed output. Keep at least a tenth of
+        # the bar unfilled even for huge batches; this is not a time estimate.
+        # Checking and saving have no determinate estimate.
+        reserved = max(1, (total + 8) // 9) if self.operation_phased else 0
+        limit = max(1, total + reserved)
+        self.progress.file_count = limit
+        self.progress.setRange(0, limit); self.progress.setValue(done)
+        message = f"{done} / {total} pages · Rendering…" if self.operation_phased else f"{done} / {total} · Processing…"
+        self.progress.setFormat(message)
+
+    def _operation_phase(self, phase):
+        if not self.busy or not self.task or self.task.cancel.is_set():
+            return
+        messages = {"rendering": "Rendering sheets…", "checking": "Checking sources…",
+                    "committing": "Saving sheets…"}
+        self.progress.file_count = 0
+        self.progress.setRange(0, 0); self.progress.setValue(0)
+        self.progress.setFormat(messages[phase])
 
     def _operation_failed(self, exc):
         if isinstance(exc, ExportCancelled):
@@ -837,12 +861,14 @@ class MainWindow(QMainWindow):
             return
         photos = list(self.model.photos); settings = self.sheet_settings()
         self._save_settings()
-        def work(cancel, progress):
-            return export_sheets(photos, settings, Path(destination), stem=stem, format=fmt, overwrite=overwrite, cancel=cancel, progress=progress)
-        self._start_operation(work, self._export_done, "Exporting sheets…")
+        def work(cancel, progress, phase):
+            return export_sheets(photos, settings, Path(destination), stem=stem, format=fmt, overwrite=overwrite, cancel=cancel, progress=progress, phase=phase)
+        self._start_operation(work, self._export_done, "Rendering sheets…", phased=True)
 
     def _export_done(self, paths):
         self.last_outputs = paths
+        self.progress.file_count = 1
+        self.progress.setRange(0, 1); self.progress.setValue(1)
         self._set_status(f"Saved {len(paths)} file{'s' if len(paths) != 1 else ''} to {paths[0].parent}")
         self.open_folder_button.setToolTip(f"Open the last exported folder: {paths[0].parent}")
         self.open_folder_button.show()

@@ -548,3 +548,130 @@ def test_reordered_preview_and_all_exported_pages_match(window, app, tmp_path):
         with render_page(window.model.photos, window.sheet_settings(), index) as expected, Image.open(path) as actual:
             assert actual.size == expected.size
             assert max(ImageStat.Stat(ImageChops.difference(actual, expected)).mean) < 1
+
+
+@pytest.mark.parametrize("folder", [False, True])
+def test_mixed_selection_reports_skipped_failed_and_duplicate_counts(window, app, tmp_path, monkeypatch, folder):
+    source = tmp_path / "inputs"
+    source.mkdir()
+    paths = sample_paths(source, 2)
+    load(window, app, [paths[0]])
+    (source / "notes.txt").write_text("unsupported")
+    (source / "broken.png").write_bytes(b"corrupt image")
+    nested = source / "nested"
+    nested.mkdir()
+    (nested / "not-counted.txt").write_text("not traversed")
+    boxes = []
+    monkeypatch.setattr(QMessageBox, "exec", lambda box: boxes.append(box.detailedText()) or QMessageBox.Ok)
+    selection = [source] if folder else paths + [source / "notes.txt", source / "broken.png"]
+    load(window, app, selection + [source / "notes.txt"])
+    assert window.status.text() == (
+        "Added 1 photo. 1 already in the list. "
+        "1 unsupported file skipped (JPEG and PNG only). 1 could not be loaded."
+    )
+    assert len(window.model.photos) == 2
+    assert len(boxes) == 1 and "broken.png" in boxes[0]
+    assert window.export_button.isEnabled()
+
+
+def test_duplicate_plus_unsupported_import_preserves_current_preview(window, app, tmp_path):
+    assert window.debounce.interval() == 180
+    paths = sample_paths(tmp_path, 2)
+    load(window, app, paths)
+    select(window, [1])
+    preview_key = window.preview.pixmap.cacheKey()
+    revision = window.preview_revision
+    unsupported = tmp_path / "skip.gif"
+    unsupported.write_text("unsupported")
+    load(window, app, [paths[0], unsupported, unsupported])
+    assert window.status.text() == (
+        "No photos added. 1 already in the list. "
+        "1 unsupported file skipped (JPEG and PNG only)."
+    )
+    assert window.preview.pixmap.cacheKey() == preview_key
+    assert window.preview_revision == revision
+    assert window.selected_rows() == [1]
+    assert window.export_button.isEnabled()
+
+
+def test_export_stays_nonterminal_through_pdf_finalization_checking_and_commit(window, app, tmp_path, monkeypatch):
+    import threading
+    import contact_sheet.core as core
+    from reportlab.pdfgen import canvas
+    load(window, app, sample_paths(tmp_path, 1))
+    pauses = {name: (threading.Event(), threading.Event()) for name in ("finalize", "check", "commit")}
+    def paused(name, original):
+        def run(*args, **kwargs):
+            entered, release = pauses[name]
+            entered.set()
+            assert release.wait(12)
+            return original(*args, **kwargs)
+        return run
+    monkeypatch.setattr(canvas.Canvas, "save", paused("finalize", canvas.Canvas.save))
+    monkeypatch.setattr(core, "_verify_sources", paused("check", core._verify_sources))
+    monkeypatch.setattr(core, "_commit_outputs", paused("commit", core._commit_outputs))
+    destination = tmp_path / "out"
+    destination.mkdir()
+    window.start_export(destination, "phase", "PDF")
+    try:
+        for name, label in [("finalize", "Rendering"), ("check", "Checking sources"), ("commit", "Saving sheets")]:
+            entered, release = pauses[name]
+            wait(app, lambda: entered.is_set() and label in window.status.text())
+            assert window.busy
+            assert not window.export_button.isEnabled()
+            assert window.cancel_button.isEnabled()
+            assert not window.open_folder_button.isVisible()
+            assert not window.last_outputs
+            assert "Saved" not in window.status.text()
+            assert not (destination / "phase.pdf").exists()
+            if name == "finalize":
+                assert window.progress.value() < window.progress.maximum()
+                assert any(fraction < 1 for _, fraction in window.progress.segments())
+            else:
+                assert window.progress.maximum() == 0
+                assert window.progress.segments() == []
+            release.set()
+        wait(app, lambda: not window.busy)
+        assert (destination / "phase.pdf").is_file()
+        assert window.status.text().startswith("Saved 1 file")
+        assert window.progress.value() == window.progress.maximum() == 1
+        assert window.open_folder_button.isVisible()
+        assert not window.cancel_button.isVisible()
+    finally:
+        for _, release in pauses.values():
+            release.set()
+
+
+@pytest.mark.parametrize("phase", ["checking", "committing"])
+def test_cancel_during_export_phase_ignores_queued_updates_and_retains_old_file(window, app, tmp_path, monkeypatch, phase):
+    import threading
+    import contact_sheet.core as core
+    load(window, app, sample_paths(tmp_path, 1))
+    entered, release = threading.Event(), threading.Event()
+    target = "_verify_sources" if phase == "checking" else "_commit_outputs"
+    original = getattr(core, target)
+    def paused(*args, **kwargs):
+        entered.set()
+        assert release.wait(12)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(core, target, paused)
+    destination = tmp_path / "out"
+    destination.mkdir()
+    old = destination / "cancel.pdf"
+    old.write_bytes(b"previous sheet")
+    window.start_export(destination, "cancel", "PDF", overwrite=True)
+    try:
+        wait(app, entered.is_set)
+        window.cancel_operation()
+        window._operation_phase("committing")
+        window._operation_progress(1, 1)
+        assert window.status.text() == "Cancelling safely…"
+        assert not window.cancel_button.isEnabled()
+    finally:
+        release.set()
+    wait(app, lambda: not window.busy)
+    assert window.status.text() == "Cancelled. No new sheets were saved."
+    assert old.read_bytes() == b"previous sheet"
+    assert not list(destination.glob(".contact-sheet-*"))
+    assert window.export_button.isEnabled()
+    assert not window.last_outputs

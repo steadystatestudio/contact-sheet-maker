@@ -755,3 +755,97 @@ def test_keep_both_avoids_leftover_pages_of_an_older_longer_batch(tmp_path):
     (tmp_path / 'sheet-001.jpg').write_bytes(b'old first batch')
     (tmp_path / 'sheet (2)-009.jpg').write_bytes(b'old longer second batch')
     assert available_output_stem(1, settings, tmp_path, 'sheet', 'JPEG') == 'sheet (3)'
+
+
+def test_collection_reports_unique_unsupported_without_changing_order(make_photo, tmp_path):
+    photos = [make_photo(name) for name in ["folder/shot10.jpg", "folder/shot2.PNG"]]
+    folder = tmp_path / "folder"
+    unsupported = folder / "notes.txt"
+    unsupported.write_text("not an image")
+    (folder / "nested").mkdir()
+    (folder / "nested" / "ignored.txt").write_text("not traversed")
+    found = collect_paths([photos[0].path, unsupported, folder, unsupported])
+    assert found == [photo.path for photo in photos]
+    assert found.unsupported_paths == (unsupported,)
+
+
+def test_unsupported_alias_does_not_hide_supported_source(make_photo, tmp_path):
+    photo = make_photo()
+    alias = tmp_path / "alias.txt"
+    try:
+        alias.symlink_to(photo.path)
+    except (OSError, NotImplementedError):
+        pytest.skip("Symlinks unavailable")
+    found = collect_paths([alias, photo.path])
+    assert found == [photo.path]
+    assert found.unsupported_paths == (photo.path,)
+
+
+@pytest.mark.parametrize("format", ["PDF", "JPEG"])
+def test_export_phase_order_keeps_render_count_separate_from_commit(make_photo, tmp_path, monkeypatch, format):
+    events = []
+    original_verify = core._verify_sources
+    original_commit = core._commit_outputs
+
+    def verify(*args):
+        assert events[-1] == "checking"
+        assert not list(tmp_path.glob("phases.*"))
+        assert not list(tmp_path.glob("phases-*.jpg"))
+        return original_verify(*args)
+
+    def commit(*args):
+        assert events[-1] == "committing"
+        return original_commit(*args)
+
+    monkeypatch.setattr(core, "_verify_sources", verify)
+    monkeypatch.setattr(core, "_commit_outputs", commit)
+    results = export_sheets([make_photo()], SheetSettings(dpi=72), tmp_path,
+                            "phases", format, phase=events.append,
+                            progress=lambda done, total: events.append((done, total)))
+    assert events == ["rendering", (1, 1), "checking", "committing"]
+    assert all(path.is_file() for path in results)
+
+
+@pytest.mark.parametrize("phase", ["checking", "committing"])
+def test_cancellation_at_export_phase_preserves_existing_output(make_photo, tmp_path, phase):
+    cancel = threading.Event()
+    old = tmp_path / "phases.pdf"
+    old.write_bytes(b"previous sheet")
+    def change_phase(value):
+        if value == phase:
+            cancel.set()
+    with pytest.raises(ExportCancelled):
+        export_sheets([make_photo()], SheetSettings(dpi=72), tmp_path, "phases", "PDF",
+                      overwrite=True, cancel=cancel, phase=change_phase)
+    assert old.read_bytes() == b"previous sheet"
+    assert not list(tmp_path.glob(".contact-sheet-*"))
+
+
+def test_vanished_unsupported_sibling_does_not_discard_supported_photos(make_photo, tmp_path, monkeypatch):
+    photo = make_photo("folder/photo.png")
+    sidecar = photo.path.parent / "vanishing.txt"
+    sidecar.write_text("unrelated sidecar")
+    original_key = core._natural_key
+    def remove_after_enumeration(path):
+        if path.name == sidecar.name:
+            sidecar.unlink()
+        return original_key(path)
+    monkeypatch.setattr(core, "_natural_key", remove_after_enumeration)
+    found = collect_paths([photo.path.parent])
+    assert found == [photo.path]
+    assert found.unsupported_paths == (sidecar,)
+
+
+def test_unresolvable_unsupported_sibling_does_not_discard_supported_photos(make_photo, tmp_path, monkeypatch):
+    photo = make_photo("folder/photo.png")
+    sidecar = photo.path.parent / "unreadable.txt"
+    sidecar.write_text("unrelated sidecar")
+    original_resolve = Path.resolve
+    def denied_sidecar(path, *args, **kwargs):
+        if path.name == sidecar.name:
+            raise OSError("sidecar became unreadable")
+        return original_resolve(path, *args, **kwargs)
+    monkeypatch.setattr(Path, "resolve", denied_sidecar)
+    found = collect_paths([photo.path.parent])
+    assert found == [photo.path]
+    assert found.unsupported_paths == (sidecar,)

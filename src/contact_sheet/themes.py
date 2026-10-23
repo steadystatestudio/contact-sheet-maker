@@ -26,6 +26,12 @@ def apply_theme(app: QApplication, preference: str = "system") -> None:
     background, panel, field = ("#2c2c2c", "#252525", "#303030") if dark else ("#f3f3f3", "#ffffff", "#fafafa")
     text, muted, border = ("#f1f1f1", "#b5b5b5", "#555555") if dark else ("#222222", "#626262", "#cccccc")
     selection = "#508fdb"
+    # Keep selection separate: its lighter blue does not support white action text.
+    action, action_hover, action_pressed = "#2768ad", "#2f6db1", "#2463a6"
+    on_action = "#ffffff"
+    action_disabled, on_action_disabled = border, muted
+    # Both indicators contrast with their surrounding surfaces and action fills.
+    focus = "#f4f8ff" if dark else "#111111"
     app.setProperty("dark", dark)
     preferred = ("Segoe UI", "Noto Sans", "DejaVu Sans", "Liberation Sans")
     available = QFontDatabase.families()
@@ -64,11 +70,15 @@ def apply_theme(app: QApplication, preference: str = "system") -> None:
         QPushButton:hover {{ background: {field}; border-color: {selection}; }}
         QPushButton:pressed, QPushButton:checked {{ background: {selection}; color: white; }}
         QPushButton:disabled {{ color: {muted}; border-color: {border}; }}
-        QPushButton:focus, QComboBox:focus, QLineEdit:focus {{ border: 2px solid {selection}; }}
-        QPushButton#primary {{ background: {selection}; color: white; font-weight: 600;
-                               border: 1px solid {selection}; }}
-        QPushButton#primary:disabled {{ background: {border}; color: {muted}; }}
-        QPushButton#primary[filesLoaded="true"]:disabled {{ background: {selection}; color: #d5e3f5; }}
+        QPushButton:enabled:focus, QComboBox:enabled:focus, QLineEdit:enabled:focus,
+        QSpinBox:enabled:focus, QDoubleSpinBox:enabled:focus {{ border-color: {focus}; }}
+        QPushButton#primary {{ background: {action}; color: {on_action}; font-weight: 600;
+                               border: 1px solid {action}; }}
+        QPushButton#primary:enabled:hover {{ background: {action_hover}; border-color: {action_hover}; }}
+        QPushButton#primary:enabled:pressed, QPushButton#primary:enabled:checked {{
+            background: {action_pressed}; border-color: {action_pressed}; }}
+        QPushButton#primary:enabled:focus {{ border-color: {focus}; }}
+        QPushButton#primary:disabled {{ background: {action_disabled}; color: {on_action_disabled}; border-color: {border}; }}
         QFrame#panel {{ background: {panel}; border: 1px solid {border}; border-radius: 10px; }}
         QTableView, QListWidget {{ background: {panel}; border: 1px solid {border}; border-radius: 8px;
                                  selection-background-color: {selection}; gridline-color: {border}; }}
