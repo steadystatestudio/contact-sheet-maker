@@ -7,6 +7,7 @@ import io
 import json
 import os
 import re
+import runpy
 import stat
 import subprocess
 import sys
@@ -191,6 +192,43 @@ def test_pyinstaller_native_command_paths_and_icon(tmp_path, target_platform):
     assert command[-1] == str(tmp_path / "scripts/launcher.py")
     assert ("--icon" in command) == (target_platform == "win32")
     assert "contact_sheet" in command
+    assert command[command.index("--additional-hooks-dir") + 1] == str(tmp_path / "packaging/hooks")
+    assert "PySide6.QtNetwork" in command
+
+
+@pytest.mark.parametrize("name", ["Qt6Pdf.dll", "libQt6Pdf.so.6", "Qt6VirtualKeyboard.dll",
+                                 "libQt6Qml.so.6", "Qt6Quick.dll", "Qt6WebEngineCore.dll",
+                                 "libQt6Network.so.6", "opengl32sw.dll", "libqpdf.so"])
+def test_build_refuses_unreviewed_optional_qt_binaries(tmp_path, name):
+    internal = tmp_path / "_internal/PySide6"
+    internal.mkdir(parents=True)
+    (internal / name).write_bytes(b"unexpected binary")
+    with pytest.raises(RuntimeError, match="Unreviewed optional Qt"):
+        build.verify_qt_subset(tmp_path)
+
+
+def test_gui_hook_removes_optional_plugins_but_preserves_native_input_methods(monkeypatch):
+    from PyInstaller.utils.hooks import qt
+    names = ["qpdf.dll", "libqpdf.so", "qtvirtualkeyboardplugin.dll", "libqtvirtualkeyboardplugin.so",
+             "qtuiotouchplugin.dll", "libqtuiotouchplugin.so", "libcomposeplatforminputcontextplugin.so",
+             "libibusplatforminputcontextplugin.so", "qwindows.dll", "qsvg.dll"]
+    monkeypatch.setattr(qt, "add_qt6_dependencies", lambda path: ([], [(name, "plugins") for name in names], []))
+    hook = runpy.run_path(str(ROOT / "packaging/hooks/hook-PySide6.QtGui.py"))
+    assert [entry[0] for entry in hook["binaries"]] == names[6:]
+
+
+def test_main_qt_hook_preserves_upstream_behavior_except_optional_mesa(monkeypatch):
+    # Execute the real wrapper while substituting only its upstream hook result.
+    code = (ROOT / "packaging/hooks/hook-PySide6.py").read_text()
+    monkeypatch.setattr(runpy, "run_path", lambda path: {
+        "hiddenimports": ["shiboken6", "inspect"], "datas": [("data", "dest")],
+        "binaries": [("opengl32sw.dll", "PySide6"), ("icu.dll", "PySide6")],
+    })
+    hook = {}
+    exec(compile(code, "hook-PySide6.py", "exec"), hook)
+    assert hook["hiddenimports"] == ["shiboken6", "inspect"]
+    assert hook["datas"] == [("data", "dest")]
+    assert hook["binaries"] == [("icu.dll", "PySide6")]
 
 
 def test_source_hashes_exclude_private_files_and_caches(tmp_path):

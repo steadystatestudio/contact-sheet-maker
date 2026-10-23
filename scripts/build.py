@@ -67,12 +67,24 @@ def pyinstaller_command(root: Path, target_platform: str) -> list[str]:
         "--noupx", "--name", NAME, "--paths", str(root / "src"), "--collect-data", "contact_sheet",
         "--specpath", str(root / "build"), "--distpath", str(root / "dist"),
         "--workpath", str(root / "build/pyinstaller"),
+        "--additional-hooks-dir", str(root / "packaging/hooks"),
     ]
-    for module in ("PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets", "tkinter", "pytest"):
+    for module in ("PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets", "PySide6.QtWebEngineQuick",
+                   "PySide6.QtNetwork", "PySide6.QtPdf", "PySide6.QtQml", "PySide6.QtQuick", "tkinter", "pytest"):
         command.extend(["--exclude-module", module])
     if target_platform == "win32":
         command.extend(["--icon", str(root / "build/icon.png")])
     return command + [str(root / "scripts/launcher.py")]
+
+
+def verify_qt_subset(bundle: Path) -> None:
+    """Fail closed if optional, unreviewed Qt components return to the package."""
+    excluded = ("qt6pdf", "qt6virtualkeyboard", "qt6qml", "qt6quick", "qt6webengine", "qt6network")
+    for path in (bundle / "_internal").rglob("*"):
+        name = path.name.lower().removeprefix("lib")
+        if path.is_file() and (name.startswith(excluded) or name == "opengl32sw.dll"
+                               or name.startswith(("qpdf.", "qtvirtualkeyboardplugin.", "qtuiotouchplugin."))):
+            raise RuntimeError(f"Unreviewed optional Qt component in package: {path.name}")
 
 
 def source_hashes(root: Path) -> dict[str, str]:
@@ -256,6 +268,7 @@ def main(argv: list[str] | None = None) -> int:
     icon_png(root, build / "icon.png")
     subprocess.run(pyinstaller_command(root, sys.platform), cwd=root, check=True, timeout=1200)
     bundle = dist / NAME
+    verify_qt_subset(bundle)
     copy_notices(root, bundle, sys.platform)
     artifacts = [make_archive(root, sys.platform)]
     if sys.platform == "linux" and not arguments.bundle_only:

@@ -42,6 +42,10 @@ texts from the matching Qt base, SVG, image-format and Wayland source modules;
 its preamble records the checksum-verified official source archives. It is an
 intentionally broader notice set than the linked binary subset, not a claim
 that every optional Qt component is used by this application.
+Packaging excludes the unused Qt PDF, Virtual Keyboard, QML/Quick, WebEngine,
+networking and optional Mesa software OpenGL components. The build rejects these
+components if they reappear. Native desktop input methods and platform plugins
+are retained; PDF/JPEG generation is provided by ReportLab/Pillow.
 
 ## AppImage runtime
 
