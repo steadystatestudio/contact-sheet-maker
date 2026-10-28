@@ -6,7 +6,9 @@ import importlib.util
 import io
 import json
 import re
+import subprocess
 import tarfile
+import tomllib
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -38,7 +40,8 @@ def test_published_or_wrong_release_is_never_mutated(change):
 def test_candidate_requires_matching_tag_version_and_main_ancestor(monkeypatch):
     def git(*args):
         if args[0] == "show":
-            return '[project]\nversion="0.1.0b1"\n'
+            return ('[project]\nversion="0.1.0b1"\n' if args[1].endswith(":pyproject.toml")
+                    else '__version__ = "0.1.0b1"\n')
         return "b" * 40 if "^{tree}" in args[-1] else "a" * 40
     calls = []
     monkeypatch.setattr(release, "git", git)
@@ -100,8 +103,21 @@ def test_portable_archive_can_be_extracted(tmp_path):
 
 def info():
     return {"source_commit": "a" * 40, "source_tree": "b" * 40, "platform": "linux", "qt_runtime": "6.11.2",
-            "application_version": "0.1.0b1",
+            "application_version": tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"],
             "dependencies": {name: "6.11.2" for name in ["PySide6", "PySide6_Addons", "PySide6_Essentials", "shiboken6"]}}
+
+
+def test_application_version_matches_package_metadata():
+    from contact_sheet import __version__
+    assert __version__ == tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
+
+
+def test_build_provenance_accepts_current_version_and_rejects_drift():
+    value_info = info()
+    release.check_build_info(value_info, "a" * 40, "b" * 40, "linux")
+    value_info["application_version"] = "0.0.0"
+    with pytest.raises(ValueError, match="BUILD-INFO"):
+        release.check_build_info(value_info, "a" * 40, "b" * 40, "linux")
 
 
 @pytest.mark.parametrize("field,value", [("source_commit", "c" * 40), ("source_tree", None), ("platform", "win32"), ("qt_runtime", "6.12.0")])
@@ -190,3 +206,162 @@ def test_unreviewed_extra_missing_and_duplicate_assets_block_ready_receipt(names
 
 def test_exact_asset_set_allows_only_prior_ready_receipt():
     release.check_asset_set([{"name": "package.zip"}, {"name": "RELEASE-READY.json"}], [{"name": "package.zip"}])
+
+
+def candidate_git(project_version="0.1.0b2", application_source='__version__ = "0.1.0b2"'):
+    def git(*args):
+        if args[0] == "show":
+            if args[1].endswith(":pyproject.toml"):
+                return f'[project]\nversion="{project_version}"\n'
+            return application_source
+        return "b" * 40 if "^{tree}" in args[-1] else "a" * 40
+    return git
+
+
+@pytest.mark.parametrize("application_source", [
+    '__version__ = "0.1.0b1"', '', '__version__ = "0.1.0b2"\n__version__ = "0.1.0b2"',
+    '__version__ = calculate_version()',
+])
+def test_candidate_rejects_application_version_drift_before_ancestry(application_source, monkeypatch):
+    monkeypatch.setattr(release, "git", candidate_git(application_source=application_source))
+    monkeypatch.setattr(release.subprocess, "run", lambda *a, **k: pytest.fail("drift reached ancestry check"))
+    with pytest.raises(ValueError):
+        release.validate_candidate("v0.1.0-beta.2", "a" * 40)
+
+
+def test_untrusted_source_never_reaches_remote_tag_creation(monkeypatch):
+    monkeypatch.setattr(release, "git", candidate_git())
+    def fail_ancestry(*args, **kwargs):
+        raise subprocess.CalledProcessError(1, args[0])
+    monkeypatch.setattr(release.subprocess, "run", fail_ancestry)
+    monkeypatch.setattr(release, "api", lambda *a, **k: pytest.fail("untrusted source reached GitHub"))
+    with pytest.raises(subprocess.CalledProcessError):
+        release.init(SimpleNamespace(tag="v0.1.0-beta.2", commit="a" * 40))
+
+
+@pytest.mark.parametrize("annotated", [False, True])
+def test_existing_reviewed_tag_is_only_verified_never_rewritten(monkeypatch, annotated):
+    calls = []
+    def api(path, payload=None):
+        calls.append((path, payload))
+        assert payload is None
+        if "/matching-refs/" in path:
+            return [{"ref": "refs/tags/v0.1.0-beta.2"}]
+        if "/git/ref/" in path and annotated:
+            return {"object": {"type": "tag", "sha": "b" * 40}}
+        return {"object": {"type": "commit", "sha": "a" * 40}}
+    monkeypatch.setattr(release, "api", api)
+    release.ensure_remote_tag("v0.1.0-beta.2", "a" * 40)
+    assert len(calls) == (3 if annotated else 2)
+
+
+@pytest.mark.parametrize("prefix_refs", [[], [{"ref": "refs/tags/v0.1.0-beta.20"}]])
+def test_missing_reviewed_tag_created_once_then_reread(monkeypatch, prefix_refs):
+    calls = []
+    def api(path, payload=None):
+        calls.append((path, payload))
+        if "/matching-refs/" in path:
+            return prefix_refs
+        if payload is not None:
+            assert payload == {"ref": "refs/tags/v0.1.0-beta.2", "sha": "a" * 40}
+            return {"ref": payload["ref"]}
+        return {"object": {"type": "commit", "sha": "a" * 40}}
+    monkeypatch.setattr(release, "api", api)
+    release.ensure_remote_tag("v0.1.0-beta.2", "a" * 40)
+    assert calls[1][0].endswith("/git/refs")
+    assert calls[2][0].endswith("/git/ref/tags/v0.1.0-beta.2")
+    assert sum(payload is not None for _, payload in calls) == 1
+
+
+def test_conflicting_existing_tag_is_never_moved(monkeypatch):
+    def api(path, payload=None):
+        assert payload is None
+        if "/matching-refs/" in path:
+            return [{"ref": "refs/tags/v0.1.0-beta.2"}]
+        return {"object": {"type": "commit", "sha": "c" * 40}}
+    monkeypatch.setattr(release, "api", api)
+    with pytest.raises(ValueError, match="moved"):
+        release.ensure_remote_tag("v0.1.0-beta.2", "a" * 40)
+
+
+@pytest.mark.parametrize("remote_commit", ["a" * 40, "c" * 40, None])
+def test_tag_creation_error_is_reread_without_retry(monkeypatch, remote_commit):
+    calls = []
+    def api(path, payload=None):
+        calls.append((path, payload))
+        if "/matching-refs/" in path:
+            return []
+        if payload is not None or remote_commit is None:
+            raise subprocess.CalledProcessError(1, ["gh", "api", path])
+        return {"object": {"type": "commit", "sha": remote_commit}}
+    monkeypatch.setattr(release, "api", api)
+    if remote_commit == "a" * 40:
+        release.ensure_remote_tag("v0.1.0-beta.2", "a" * 40)
+    else:
+        with pytest.raises(ValueError if remote_commit else subprocess.CalledProcessError):
+            release.ensure_remote_tag("v0.1.0-beta.2", "a" * 40)
+    assert sum(payload is not None for _, payload in calls) == 1
+    assert len(calls) == 3
+
+
+@pytest.mark.parametrize("response", [None, {}, [None], [{}], [{"ref": None}], [
+    {"ref": "refs/tags/v0.1.0-beta.2"}, {"ref": "refs/tags/v0.1.0-beta.2"},
+]])
+def test_unreadable_tag_inventory_never_means_absent(monkeypatch, response):
+    calls = []
+    monkeypatch.setattr(release, "api", lambda *args: calls.append(args) or response)
+    with pytest.raises(ValueError):
+        release.ensure_remote_tag("v0.1.0-beta.2", "a" * 40)
+    assert len(calls) == 1
+
+
+def test_failed_tag_inventory_never_attempts_a_write(monkeypatch):
+    calls = []
+    def api(path, payload=None):
+        calls.append((path, payload))
+        raise subprocess.CalledProcessError(1, ["gh", "api", path])
+    monkeypatch.setattr(release, "api", api)
+    with pytest.raises(subprocess.CalledProcessError):
+        release.ensure_remote_tag("v0.1.0-beta.2", "a" * 40)
+    assert len(calls) == 1 and calls[0][1] is None
+
+
+def test_init_validates_source_and_tag_before_draft_release_mutation(tmp_path, monkeypatch):
+    args = SimpleNamespace(tag="v0.1.0-beta.2", commit="a" * 40)
+    calls = []
+    monkeypatch.setattr(release, "validate_candidate", lambda *a: calls.append("source") or "b" * 40)
+    monkeypatch.setattr(release, "ensure_remote_tag", lambda *a: calls.append("tag"))
+    def api(path, payload=None):
+        calls.append("release-write" if payload else "release-read")
+        return {"id": 7} if payload else []
+    monkeypatch.setattr(release, "api", api)
+    monkeypatch.setattr(release, "invalidate_receipt", lambda *a: calls.append("invalidate"))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "output"))
+    release.init(args)
+    assert calls == ["source", "release-read", "tag", "release-write", "invalidate"]
+
+
+@pytest.mark.parametrize("change", [{"draft": False}, {"target_commitish": "c" * 40}])
+def test_init_never_recreates_deleted_tag_of_published_or_unrelated_release(monkeypatch, change):
+    args = SimpleNamespace(tag="v0.1.0-beta.2", commit="a" * 40)
+    existing = {"draft": True, "prerelease": True, "tag_name": args.tag, "target_commitish": args.commit}
+    existing.update(change)
+    monkeypatch.setattr(release, "validate_candidate", lambda *a: "b" * 40)
+    monkeypatch.setattr(release, "api", lambda *a: [existing])
+    monkeypatch.setattr(release, "ensure_remote_tag", lambda *a: pytest.fail("unrelated release reached tag write"))
+    with pytest.raises(ValueError, match="draft prerelease"):
+        release.init(args)
+
+
+def test_malformed_creation_response_is_resolved_by_exact_reread(monkeypatch):
+    calls = []
+    def api(path, payload=None):
+        calls.append((path, payload))
+        if "/matching-refs/" in path:
+            return []
+        if payload is not None:
+            raise json.JSONDecodeError("unexpected response", "", 0)
+        return {"object": {"type": "commit", "sha": "a" * 40}}
+    monkeypatch.setattr(release, "api", api)
+    release.ensure_remote_tag("v0.1.0-beta.2", "a" * 40)
+    assert len(calls) == 3 and sum(payload is not None for _, payload in calls) == 1
