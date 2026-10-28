@@ -4,7 +4,7 @@ A free, offline Steady State Studio desktop utility for turning local JPEG and P
 
 **Public beta — 0.1.0b1.** Every feature is free. No account, uploads, watermarks, or feature gates. Real-user preference and repeat use are still being evaluated.
 
-[Studio website](https://steady-state-studio.rpxjjnqmguarhzkg.chatgpt.site/) · [Versioned downloads](https://github.com/steadystatestudio/contact-sheet-maker/releases) · [Report a problem](https://github.com/steadystatestudio/contact-sheet-maker/issues) · [Support the Studio](https://steady-state-studio.rpxjjnqmguarhzkg.chatgpt.site/support/)
+[Studio website](https://steady-state-studio.rpxjjnqmguarhzkg.chatgpt.site/) · [Versioned downloads](https://github.com/steadystatestudio/contact-sheet-maker/releases) · [Report a problem](https://github.com/steadystatestudio/contact-sheet-maker/issues) · [Donate on Ko-fi](https://ko-fi.com/steadystatestudio)
 
 ![Dark interface](docs/screenshot-dark.png)
 
@@ -58,7 +58,7 @@ PDF page dimensions match the selected paper. Complete filename captions wrap to
 
 ## Privacy and safety
 
-No telemetry, automatic upload, cloud account, subscription, watermark, or feature gate. Support opens the Studio support page only when clicked. Donation checkout remains unavailable there until donor-facing payment privacy is verified. Help and processing are local. The app saves ordinary UI preferences and last chosen folder paths with Qt settings; the loaded photo list is not persisted.
+No telemetry, automatic upload, cloud account, subscription, watermark, or feature gate. Donate opens the Studio's Ko-fi page in your default browser only when clicked. Donations are optional; checkout is handled on Ko-fi, outside the app. Help and processing are local. The app saves ordinary UI preferences and last chosen folder paths with Qt settings; the loaded photo list is not persisted.
 
 Original photos are never modified. Output names cannot replace source files, including hardlink aliases. Files are inspected as actual JPEG/PNG content, corruption is reported, and images above 60 million pixels are refused. Very large compressed files can still take time to read; native decoder calls cannot be interrupted halfway through, so cancellation is checked between safe steps. Source fingerprints detect photos changed since import or while generating sheets and stop export rather than quietly using mixed versions.
 
