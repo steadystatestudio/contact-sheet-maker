@@ -1,10 +1,25 @@
 # Public beta validation
 
+Current candidate: **0.1.0b2** (`v0.1.0-beta.2`). This is a beta candidate, not a claim that packages have been published. Use the exact release's validation receipt and download assets to establish publication and native results.
+
+## Beta.2 changes and validation
+
+- The desktop toolbar now says **Donate**, matching the other Studio utilities, and opens `https://ko-fi.com/steadystatestudio` in the default browser only when clicked.
+- Donations are optional and checkout is outside the app. If the browser cannot open, a dismissible message shows the Ko-fi address; retrying does not disturb loaded photos or export readiness.
+- README and in-app Help describe the explicit-click behavior. Regression tests cover startup, repeated clicks and browser failure/dismiss/retry. Photo processing, export behavior and the dependency lock are unchanged.
+- The existing manual draft workflow can create a missing beta tag only after validating the exact commit, both application/package versions and main ancestry. Existing tags are never moved; the remote tag is reread and verified before staging and again before the final receipt. No workflow permissions were added.
+
+The Donate implementation passed **270 local tests** on Debian 13 with Python 3.12 and Qt offscreen, plus a source smoke test of 13 synthetic photos into two PDF pages and two JPEG sheets with original hashes unchanged. Light, dark and compact interfaces were rendered; dark and compact views and the real browser-failure dialog were checked. These checks do not establish native release-package results.
+
+The complete beta.2 local suite passed **309 tests, zero failures and zero skips** in 130.34 seconds on 2026-10-28. The focused release-safety suite passed **70 tests**; dependency compatibility, byte compilation, version consistency and diff checks also passed. Before publication, the exact beta.2 source must pass native Windows Server 2022 and Ubuntu 22.04 tests, package builds and packaged smoke checks, plus Ubuntu 24.04 verification and smoke tests of the exact retained Linux bytes. Matching library sources, asset digests and `RELEASE-READY.json` must be retained in the draft release. Public identity/binary metadata, donation destination and synthetic QA must be reviewed before publishing. No beta.1 hashes or native results below are evidence for beta.2.
+
+## Beta.1 historical evidence
+
 Version: **0.1.0b1** (`v0.1.0-beta.1`).
 
 This document separates automated evidence from real-device and user research. The GitHub release's validation receipt identifies the exact source revision and packaged bytes. A draft release is not a public download.
 
-## Release changes
+### Release changes
 
 - Complete filename captions wrap to two readable lines; layouts that cannot preserve them are rejected before export.
 - Export readiness has a nearby visible explanation. Full import errors remain available, including batches with more than 100 failures.
@@ -12,7 +27,7 @@ This document separates automated evidence from real-device and user research. T
 - The Support action opens the Studio support page only on request. Donations remain unavailable there until payment-provider privacy is verified.
 - Release assets and QA are staged on draft GitHub releases, avoiding the account's Actions artifact-storage quota. Ubuntu 24.04 verifies the exact Ubuntu 22.04 package bytes before publication.
 
-## Evidence
+### Evidence
 
 Baseline native CI passed 206 tests on each of Windows Server 2022 and Ubuntu 22.04, plus native package builds and executable/AppImage smoke checks. Historical artifact uploads failed because of quota; those builds were not reused as public downloads.
 

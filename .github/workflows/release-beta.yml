@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing reviewed tag, vX.Y.Z-beta.N
+        description: Reviewed tag, vX.Y.Z-beta.N (created only if missing)
         required: true
         type: string
       expected_commit:
