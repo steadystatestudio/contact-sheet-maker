@@ -162,10 +162,27 @@ def check_build_info(info: dict, commit: str, tree: str, platform: str) -> None:
             raise ValueError("BUILD-INFO dependencies do not match retained sources")
 
 
+def matching_releases(tag: str) -> list[dict]:
+    """Exhaust the authenticated release inventory before treating a tag as new."""
+    matches = []
+    page = 1
+    while True:
+        releases = api(f"repos/{REPOSITORY}/releases?per_page=100&page={page}")
+        if (not isinstance(releases, list) or len(releases) > 100
+                or any(not isinstance(item, dict) or not isinstance(item.get("tag_name"), str)
+                       for item in releases)):
+            raise ValueError("Cannot establish the complete release inventory")
+        matches.extend(item for item in releases if item["tag_name"] == tag)
+        if len(releases) < 100:
+            return matches
+        page += 1
+
+
 def init(args) -> None:
     tree = validate_candidate(args.tag, args.commit)
-    releases = api(f"repos/{REPOSITORY}/releases?per_page=100")
-    matches = [release for release in releases if release["tag_name"] == args.tag]
+    matches = matching_releases(args.tag)
+    if len(matches) > 1:
+        raise ValueError("Multiple releases refer to the reviewed beta tag")
     if matches:
         release = matches[0]
         # Never recreate a deleted tag belonging to a published or unrelated
