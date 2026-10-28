@@ -365,3 +365,104 @@ def test_malformed_creation_response_is_resolved_by_exact_reread(monkeypatch):
     monkeypatch.setattr(release, "api", api)
     release.ensure_remote_tag("v0.1.0-beta.2", "a" * 40)
     assert len(calls) == 3 and sum(payload is not None for _, payload in calls) == 1
+
+
+def release_page(page, size=100):
+    return [{"tag_name": f"v0.0.{page}-beta.{number}"} for number in range(size)]
+
+
+def test_published_release_on_second_page_blocks_any_tag_write(monkeypatch):
+    args = SimpleNamespace(tag="v0.1.0-beta.2", commit="a" * 40)
+    published = {"tag_name": args.tag, "target_commitish": args.commit, "draft": False, "prerelease": True}
+    calls = []
+    def api(path, payload=None):
+        calls.append(path)
+        assert payload is None
+        return release_page(1) if path.endswith("page=1") else [published]
+    monkeypatch.setattr(release, "validate_candidate", lambda *a: "b" * 40)
+    monkeypatch.setattr(release, "api", api)
+    monkeypatch.setattr(release, "ensure_remote_tag", lambda *a: pytest.fail("published release reached tag write"))
+    with pytest.raises(ValueError, match="draft prerelease"):
+        release.init(args)
+    assert len(calls) == 2 and calls[-1].endswith("page=2")
+
+
+@pytest.mark.parametrize("full_pages,last_size", [(1, 0), (2, 0), (2, 3)])
+def test_absent_release_exhausts_later_pages_before_tag_write(tmp_path, monkeypatch, full_pages, last_size):
+    args = SimpleNamespace(tag="v0.1.0-beta.2", commit="a" * 40)
+    calls = []
+    def api(path, payload=None):
+        if payload is not None:
+            calls.append("create-draft")
+            return {"id": 7}
+        page = int(path.rsplit("page=", 1)[1])
+        calls.append(page)
+        return release_page(page, 100 if page <= full_pages else last_size)
+    monkeypatch.setattr(release, "validate_candidate", lambda *a: "b" * 40)
+    monkeypatch.setattr(release, "api", api)
+    monkeypatch.setattr(release, "ensure_remote_tag", lambda *a: calls.append("tag"))
+    monkeypatch.setattr(release, "invalidate_receipt", lambda *a: None)
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "output"))
+    release.init(args)
+    assert calls == [*range(1, full_pages + 2), "tag", "create-draft"]
+
+
+@pytest.mark.parametrize("response", [None, {}, [None], [{}], [{"tag_name": None}], release_page(2, 101)])
+def test_malformed_later_release_page_never_means_absent(monkeypatch, response):
+    args = SimpleNamespace(tag="v0.1.0-beta.2", commit="a" * 40)
+    calls = []
+    def api(path, payload=None):
+        calls.append(path)
+        assert payload is None
+        return release_page(1) if path.endswith("page=1") else response
+    monkeypatch.setattr(release, "validate_candidate", lambda *a: "b" * 40)
+    monkeypatch.setattr(release, "api", api)
+    monkeypatch.setattr(release, "ensure_remote_tag", lambda *a: pytest.fail("unreadable page reached tag write"))
+    with pytest.raises(ValueError, match="release inventory"):
+        release.init(args)
+    assert len(calls) == 2
+
+
+def test_failed_later_release_page_never_means_absent(monkeypatch):
+    args = SimpleNamespace(tag="v0.1.0-beta.2", commit="a" * 40)
+    def api(path, payload=None):
+        assert payload is None
+        if path.endswith("page=1"):
+            return release_page(1)
+        raise subprocess.CalledProcessError(1, ["gh", "api", path])
+    monkeypatch.setattr(release, "validate_candidate", lambda *a: "b" * 40)
+    monkeypatch.setattr(release, "api", api)
+    monkeypatch.setattr(release, "ensure_remote_tag", lambda *a: pytest.fail("failed page reached tag write"))
+    with pytest.raises(subprocess.CalledProcessError):
+        release.init(args)
+
+
+def test_duplicate_release_across_pages_blocks_tag_write(monkeypatch):
+    args = SimpleNamespace(tag="v0.1.0-beta.2", commit="a" * 40)
+    draft = {"id": 7, "tag_name": args.tag, "target_commitish": args.commit, "draft": True, "prerelease": True}
+    def api(path, payload=None):
+        assert payload is None
+        return [draft, *release_page(1, 99)] if path.endswith("page=1") else [draft]
+    monkeypatch.setattr(release, "validate_candidate", lambda *a: "b" * 40)
+    monkeypatch.setattr(release, "api", api)
+    monkeypatch.setattr(release, "ensure_remote_tag", lambda *a: pytest.fail("ambiguous release reached tag write"))
+    with pytest.raises(ValueError, match="Multiple releases"):
+        release.init(args)
+
+
+def test_existing_draft_on_second_page_is_reused_after_full_inventory(tmp_path, monkeypatch):
+    args = SimpleNamespace(tag="v0.1.0-beta.2", commit="a" * 40)
+    draft = {"id": 7, "tag_name": args.tag, "target_commitish": args.commit, "draft": True, "prerelease": True}
+    calls = []
+    def api(path, payload=None):
+        assert payload is None
+        calls.append("page1" if path.endswith("page=1") else "page2")
+        return release_page(1) if path.endswith("page=1") else [draft]
+    monkeypatch.setattr(release, "validate_candidate", lambda *a: "b" * 40)
+    monkeypatch.setattr(release, "api", api)
+    monkeypatch.setattr(release, "ensure_remote_tag", lambda *a: calls.append("tag"))
+    monkeypatch.setattr(release, "invalidate_receipt", lambda *a: calls.append("invalidate"))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "output"))
+    release.init(args)
+    assert calls == ["page1", "page2", "tag", "invalidate"]
+    assert args.release_id == "7"
