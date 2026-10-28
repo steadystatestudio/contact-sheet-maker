@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox, QDialog
 from PySide6.QtGui import QDesktopServices
 from PIL import Image
 import pytest
-from contact_sheet.gui import MainWindow, SettingsDialog, SUPPORT_URL
+from contact_sheet.gui import MainWindow, SettingsDialog, DONATE_URL
 from contact_sheet.core import inspect_photo, ExportCancelled
 
 @pytest.fixture(scope="session")
@@ -156,13 +156,53 @@ def test_settings_cancel_and_apply(window,app,monkeypatch):
     saved.close()
 
 
-def test_support_only_explicit_click(window,monkeypatch):
-    urls=[]
-    monkeypatch.setattr(QDesktopServices,"openUrl",lambda url:urls.append(url.toString()) or True)
-    assert urls==[]
-    assert window.support_button.text() == "Support"
-    window.support_button.click()
-    assert urls==[SUPPORT_URL]
+def test_donate_only_explicit_click(app, tmp_path, monkeypatch):
+    urls = []
+    dialogs = []
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: urls.append(url.toString()) or True)
+    monkeypatch.setattr(QMessageBox, "information", lambda *args: dialogs.append(args))
+    window = MainWindow(QSettings(str(tmp_path / "donate-settings.ini"), QSettings.IniFormat))
+    try:
+        window.show(); app.processEvents()
+        assert urls == []
+        assert dialogs == []
+        assert window.donate_button.text() == "Donate"
+        assert window.donate_button.toolTip() == "Support development on Ko-fi"
+        assert DONATE_URL == "https://ko-fi.com/steadystatestudio"
+        window.donate_button.click()
+        window.donate_button.click()
+        assert urls == [DONATE_URL, DONATE_URL]
+        assert dialogs == []
+    finally:
+        window.close(); app.processEvents()
+    assert urls == [DONATE_URL, DONATE_URL]
+    assert dialogs == []
+
+
+def test_donate_browser_failure_can_be_dismissed_and_retried(window, app, tmp_path, monkeypatch):
+    load(window, app, sample_paths(tmp_path))
+    photos = list(window.model.photos)
+    status = window.status.text()
+    urls = []
+    dialogs = []
+    def open_url(url):
+        urls.append(url.toString())
+        return len(urls) > 1
+    monkeypatch.setattr(QDesktopServices, "openUrl", open_url)
+    monkeypatch.setattr(QMessageBox, "information", lambda *args: dialogs.append(args) or QMessageBox.Ok)
+    window.donate_button.click()
+    assert urls == [DONATE_URL]
+    assert len(dialogs) == 1
+    assert dialogs[0][1] == "Support Steady State Studio"
+    assert "Could not open your browser" in dialogs[0][2]
+    assert DONATE_URL in dialogs[0][2]
+    assert "donations are optional" in dialogs[0][2]
+    window.donate_button.click()
+    assert urls == [DONATE_URL, DONATE_URL]
+    assert len(dialogs) == 1
+    assert window.model.photos == photos
+    assert window.status.text() == status
+    assert window.export_button.isEnabled()
 
 
 def test_busy_close_no_then_yes(window,app,tmp_path,monkeypatch):
