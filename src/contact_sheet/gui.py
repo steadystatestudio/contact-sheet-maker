@@ -24,7 +24,7 @@ from .core import (Photo, SheetSettings, ExportCancelled, CaptionLayoutError,
 from .themes import apply_theme
 from .widgets import FileProgressBar
 
-SUPPORT_URL = "https://steady-state-studio.rpxjjnqmguarhzkg.chatgpt.site/support/"
+DONATE_URL = "https://ko-fi.com/steadystatestudio"
 
 
 def visible_text(text: str) -> str:
@@ -219,9 +219,9 @@ class MainWindow(QMainWindow):
             toolbar.addWidget(widget)
         toolbar.addStretch()
         self.help_button = self._button("Help", self._help)
-        self.support_button = self._button("Support", self._open_support, "Open the Studio support page; every feature is free")
+        self.donate_button = self._button("Donate", self._open_donate, "Support development on Ko-fi")
         self.settings_button = self._button("Settings", self._settings_dialog)
-        for widget in (self.help_button, self.support_button, self.settings_button):
+        for widget in (self.help_button, self.donate_button, self.settings_button):
             toolbar.addWidget(widget)
         layout.addLayout(toolbar)
 
@@ -905,9 +905,9 @@ class MainWindow(QMainWindow):
         if self.last_outputs:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.last_outputs[0].parent)))
 
-    def _open_support(self):
-        if not QDesktopServices.openUrl(QUrl(SUPPORT_URL)):
-            QMessageBox.information(self, "Support Steady State Studio", f"Visit the Studio support page:\n{SUPPORT_URL}\n\nEvery feature is free.")
+    def _open_donate(self):
+        if not QDesktopServices.openUrl(QUrl(DONATE_URL)):
+            QMessageBox.information(self, "Support Steady State Studio", f"Could not open your browser. Visit Ko-fi:\n{DONATE_URL}\n\nEvery feature is free; donations are optional.")
 
     def _settings_dialog(self):
         dialog = SettingsDialog(self.settings.value("theme", "system", type=str), self)
@@ -927,7 +927,7 @@ class MainWindow(QMainWindow):
                 "2. Select rows and use ↑ / ↓ to set the sheet order. Remove and Clear only change this list.\n\n"
                 "3. Choose a preset or adjust page size, orientation, grid, margins and gaps. The preview shows one full sheet; use ‹ / › to review every page.\n\n"
                 "4. Choose PDF or JPEG, resolution and a filename, then Export Sheets. JPEG creates numbered page files. Existing outputs require an explicit replacement choice.\n\n"
-                "Original photos are never modified. Everything runs on this computer, with no uploads or telemetry. Every feature is free; Support opens the Studio support page.\n\n"
+                "Original photos are never modified. Everything runs on this computer, with no uploads or telemetry. Every feature is free; Donate opens Ko-fi in your browser only when clicked.\n\n"
                 f"Contact Sheet Maker {__version__} · Public beta · Steady State Studio\n\n"
                 "Uses Qt/PySide6 under LGPLv3; see the bundled THIRD_PARTY_NOTICES.md and LIBRARY-REPLACEMENT.txt.")
         box = QMessageBox(QMessageBox.Information, "Contact Sheet Maker · Help", text, parent=self)
