@@ -1,12 +1,14 @@
 """Stage and verify a manual beta release. This tool never publishes a release.
 
-All GitHub operations require an explicitly selected draft prerelease, a
-trusted repository, and an exact commit. No personal settings or input photos
-are included in QA archives. Run only from the reviewed release workflow.
+The reviewed workflow may create a missing beta tag after source validation;
+existing tags are never moved. All release-asset operations require the selected
+exact-commit draft prerelease. No personal settings or input photos are included
+in QA archives. Run only from the reviewed release workflow.
 """
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -34,13 +36,18 @@ def git(*arguments: str) -> str:
 def validate_candidate(tag: str, commit: str) -> str:
     match = re.fullmatch(r"v(\d+\.\d+\.\d+)-beta\.(\d+)", tag)
     if not match:
-        raise ValueError("Use an existing vX.Y.Z-beta.N tag")
+        raise ValueError("Use a vX.Y.Z-beta.N tag")
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("Expected commit must be a complete lowercase Git SHA")
-    if git("rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}") != commit:
-        raise ValueError("Beta tag does not match the expected commit")
+    if git("rev-parse", "--verify", f"{commit}^{{commit}}") != commit:
+        raise ValueError("Source does not match the expected commit")
     project = tomllib.loads(git("show", f"{commit}:pyproject.toml"))
-    if project["project"]["version"] != f"{match[1]}b{match[2]}":
+    expected_version = f"{match[1]}b{match[2]}"
+    module = ast.parse(git("show", f"{commit}:src/contact_sheet/__init__.py"))
+    versions = [node.value for node in module.body if isinstance(node, ast.Assign)
+                and any(isinstance(target, ast.Name) and target.id == "__version__" for target in node.targets)]
+    if (project["project"]["version"] != expected_version or len(versions) != 1
+            or ast.literal_eval(versions[0]) != expected_version):
         raise ValueError("Beta tag does not match the application version")
     subprocess.run(["git", "merge-base", "--is-ancestor", commit, "origin/main"], cwd=ROOT, check=True)
     return git("rev-parse", f"{commit}^{{tree}}")
@@ -73,6 +80,27 @@ def verify_remote_tag(tag: str, commit: str) -> None:
             break
         obj = api(f"repos/{REPOSITORY}/git/tags/{obj['sha']}")["object"]
     raise ValueError("Remote beta tag does not resolve to a commit")
+
+
+def ensure_remote_tag(tag: str, commit: str) -> None:
+    """Create only a missing reviewed tag; existing tags are never moved."""
+    target = f"refs/tags/{tag}"
+    refs = api(f"repos/{REPOSITORY}/git/matching-refs/tags/{tag}")
+    if (not isinstance(refs, list) or any(not isinstance(ref, dict)
+            or not isinstance(ref.get("ref"), str) for ref in refs)):
+        raise ValueError("Cannot establish whether the reviewed beta tag exists")
+    matches = [ref for ref in refs if ref["ref"] == target]
+    if len(matches) > 1:
+        raise ValueError("Duplicate beta tag refs in GitHub response")
+    if not matches:
+        try:
+            api(f"repos/{REPOSITORY}/git/refs", {"ref": target, "sha": commit})
+        except (subprocess.CalledProcessError, json.JSONDecodeError):
+            # A concurrent creator or an uncertain response may have completed
+            # the one write. Reread rather than retrying or moving any tag.
+            verify_remote_tag(tag, commit)
+            return
+    verify_remote_tag(tag, commit)
 
 
 def current_release(args) -> dict:
@@ -136,13 +164,15 @@ def check_build_info(info: dict, commit: str, tree: str, platform: str) -> None:
 
 def init(args) -> None:
     tree = validate_candidate(args.tag, args.commit)
-    verify_remote_tag(args.tag, args.commit)
     releases = api(f"repos/{REPOSITORY}/releases?per_page=100")
     matches = [release for release in releases if release["tag_name"] == args.tag]
     if matches:
         release = matches[0]
+        # Never recreate a deleted tag belonging to a published or unrelated
+        # release, which could silently change its public source association.
         validate_draft(release, args.tag, args.commit)
-    else:
+    ensure_remote_tag(args.tag, args.commit)
+    if not matches:
         release = api(f"repos/{REPOSITORY}/releases", {
             "tag_name": args.tag, "target_commitish": args.commit, "draft": True,
             "prerelease": True, "name": f"Contact Sheet Maker {args.tag} (beta)",
