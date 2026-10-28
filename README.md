@@ -2,7 +2,7 @@
 
 A free, offline Steady State Studio desktop utility for turning local JPEG and PNG photos into printable contact sheets.
 
-**Public beta — 0.1.0b1.** Every feature is free. No account, uploads, watermarks, or feature gates. Real-user preference and repeat use are still being evaluated.
+**Public beta — 0.1.0b2.** Every feature is free. No account, uploads, watermarks, or feature gates. Real-user preference and repeat use are still being evaluated.
 
 [Studio website](https://steady-state-studio.rpxjjnqmguarhzkg.chatgpt.site/) · [Versioned downloads](https://github.com/steadystatestudio/contact-sheet-maker/releases) · [Report a problem](https://github.com/steadystatestudio/contact-sheet-maker/issues) · [Donate on Ko-fi](https://ko-fi.com/steadystatestudio)
 
