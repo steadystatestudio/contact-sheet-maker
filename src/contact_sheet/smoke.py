@@ -5,7 +5,7 @@ import json
 import time
 import sys
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageCms
 from PySide6.QtCore import QSettings
 from .gui import MainWindow
 from .themes import apply_theme
@@ -16,9 +16,12 @@ def run(app, destination: Path) -> int:
     inputs = destination / "inputs"; inputs.mkdir(exist_ok=True)
     outputs = destination / "outputs"; outputs.mkdir(exist_ok=True)
     paths = []
+    srgb = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
     for index in range(13):
         path = inputs / f"café-{index + 1:02d}.png"
-        Image.new("RGB", (160, 100) if index % 2 else (100, 160), (40 + index * 12, 110, 160)).save(path)
+        with Image.new("RGB", (160, 100) if index % 2 else (100, 160), (40 + index * 12, 110, 160)) as source:
+            # Exercise the frozen ImageCms/LittleCMS path, not just an import.
+            source.save(path, icc_profile=srgb)
         paths.append(path)
     before = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
     window = MainWindow(QSettings(str(destination / "smoke-settings.ini"), QSettings.IniFormat))
@@ -43,9 +46,10 @@ def run(app, destination: Path) -> int:
                               ("dark", (1280, 680), "ui-dark")):
         apply_theme(app, theme)
         window.resize(*size)
-        app.processEvents()
+        app.processEvents(); app.processEvents()
         assert window.width() <= size[0] and window.height() <= size[1]
         assert window.export_button.isVisible() and window.status.isVisible()
+        assert window.output_controls.height() >= window.output_controls.minimumSizeHint().height()
         assert window.grab().save(str(destination / f"{name}.png"))
         if size[1] == 480:
             window.work_scroll.ensureWidgetVisible(window.title_input)

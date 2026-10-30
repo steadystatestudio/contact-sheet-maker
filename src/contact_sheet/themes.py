@@ -26,6 +26,7 @@ def apply_theme(app: QApplication, preference: str = "system") -> None:
     background, panel, field = ("#2c2c2c", "#252525", "#303030") if dark else ("#f3f3f3", "#ffffff", "#fafafa")
     text, muted, border = ("#f1f1f1", "#b5b5b5", "#555555") if dark else ("#222222", "#626262", "#cccccc")
     selection = "#508fdb"
+    on_selection = "#111111"
     # Keep selection separate: its lighter blue does not support white action text.
     action, action_hover, action_pressed = "#2768ad", "#2f6db1", "#2463a6"
     on_action = "#ffffff"
@@ -55,7 +56,7 @@ def apply_theme(app: QApplication, preference: str = "system") -> None:
                         (QPalette.AlternateBase, "#4a4a4a" if dark else "#e2e2e2"),
                         (QPalette.Mid, border), (QPalette.Button, panel),
                         (QPalette.ButtonText, text), (QPalette.Highlight, selection),
-                        (QPalette.HighlightedText, "#ffffff"), (QPalette.ToolTipBase, panel),
+                        (QPalette.HighlightedText, on_selection), (QPalette.ToolTipBase, panel),
                         (QPalette.ToolTipText, text)]:
         palette.setColor(role, QColor(color))
     app.setPalette(palette)
@@ -68,7 +69,7 @@ def apply_theme(app: QApplication, preference: str = "system") -> None:
         QPushButton {{ background: transparent; border: 1px solid {border}; border-radius: 6px;
                        padding: 9px 13px; min-height: 19px; }}
         QPushButton:hover {{ background: {field}; border-color: {selection}; }}
-        QPushButton:pressed, QPushButton:checked {{ background: {selection}; color: white; }}
+        QPushButton:pressed, QPushButton:checked {{ background: {selection}; color: {on_selection}; }}
         QPushButton:disabled {{ color: {muted}; border-color: {border}; }}
         QPushButton:enabled:focus, QComboBox:enabled:focus, QLineEdit:enabled:focus,
         QSpinBox:enabled:focus, QDoubleSpinBox:enabled:focus {{ border-color: {focus}; }}
@@ -81,7 +82,7 @@ def apply_theme(app: QApplication, preference: str = "system") -> None:
         QPushButton#primary:disabled {{ background: {action_disabled}; color: {on_action_disabled}; border-color: {border}; }}
         QFrame#panel {{ background: {panel}; border: 1px solid {border}; border-radius: 10px; }}
         QTableView, QListWidget {{ background: {panel}; border: 1px solid {border}; border-radius: 8px;
-                                 selection-background-color: {selection}; gridline-color: {border}; }}
+                                 selection-background-color: {selection}; selection-color: {on_selection}; gridline-color: {border}; }}
         QTableView::item, QListWidget::item {{ padding: 7px; }}
         QTableView#fileTable::item {{ padding: 3px 8px; }}
         QHeaderView::section {{ background: {field}; color: {muted}; padding: 9px 8px;
@@ -95,7 +96,7 @@ def apply_theme(app: QApplication, preference: str = "system") -> None:
         QSpinBox::down-button, QDoubleSpinBox::down-button {{ subcontrol-origin: border; subcontrol-position: bottom right; width: 20px; border: none; }}
         QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{ image: url("{up_arrow}"); width: 10px; height: 6px; }}
         QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{ image: url("{down_arrow}"); width: 10px; height: 6px; }}
-        QComboBox QAbstractItemView {{ background: {panel}; selection-background-color: {selection}; }}
+        QComboBox QAbstractItemView {{ background: {panel}; selection-background-color: {selection}; selection-color: {on_selection}; }}
 
         QComboBox QAbstractItemView::item, QMenu::item {{ min-height: 26px; padding: 6px 10px; }}
         QWidget#actionRow QPushButton {{ padding: 7px 9px; }}

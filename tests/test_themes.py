@@ -137,6 +137,23 @@ def test_secondary_pressed_action_keeps_visible_focus(theme_window):
     app.processEvents()
     focus, fill = colors(anchor)
     assert contrast(focus, fill) >= 3
+    # Qt's palette reports the normal text role even when a :pressed stylesheet
+    # changes the painted glyphs, so inspect their rendered interior pixels.
+    foreground = app.palette().color(QPalette.HighlightedText)
+    image = anchor.grab().toImage()
+    assert any(image.pixelColor(x, y) == foreground
+               for y in range(10, image.height() - 10)
+               for x in range(10, image.width() - 10))
+    assert contrast(foreground, fill) >= 4.5
+
+
+def test_selection_and_progress_text_have_readable_contrast(theme_window):
+    app, window, primary, anchor = theme_window
+    # Tables, combo selection, and FileProgressBar's filled overlay share these
+    # palette roles; the action button uses its separate darker-blue role.
+    for group in (QPalette.Active, QPalette.Inactive):
+        assert contrast(app.palette().color(group, QPalette.HighlightedText),
+                        app.palette().color(group, QPalette.Highlight)) >= 4.5
 
 
 @pytest.mark.parametrize("files_loaded", [False, True])

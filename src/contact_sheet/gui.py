@@ -223,7 +223,9 @@ class MainWindow(QMainWindow):
         self.settings_button = self._button("Settings", self._settings_dialog)
         for widget in (self.help_button, self.donate_button, self.settings_button):
             toolbar.addWidget(widget)
-        layout.addLayout(toolbar)
+        # The shared Studio import/help bar stays available while the workspace
+        # scrolls on a short display, like the fixed File Renamer controls.
+        outer.insertLayout(0, toolbar)
 
         self.splitter = QSplitter(Qt.Horizontal)
         self.splitter.setChildrenCollapsible(False)
@@ -928,7 +930,7 @@ class MainWindow(QMainWindow):
                 "3. Choose a preset or adjust page size, orientation, grid, margins and gaps. The preview shows one full sheet; use ‹ / › to review every page.\n\n"
                 "4. Choose PDF or JPEG, resolution and a filename, then Export Sheets. JPEG creates numbered page files. Existing outputs require an explicit replacement choice.\n\n"
                 "Original photos are never modified. Everything runs on this computer, with no uploads or telemetry. Every feature is free; Donate opens Ko-fi in your browser only when clicked.\n\n"
-                f"Contact Sheet Maker {__version__} · Public beta · Steady State Studio\n\n"
+                f"Contact Sheet Maker {__version__} · Steady State Studio\n\n"
                 "Uses Qt/PySide6 under LGPLv3; see the bundled THIRD_PARTY_NOTICES.md and LIBRARY-REPLACEMENT.txt.")
         box = QMessageBox(QMessageBox.Information, "Contact Sheet Maker · Help", text, parent=self)
         box.setTextFormat(Qt.PlainText); box.exec()

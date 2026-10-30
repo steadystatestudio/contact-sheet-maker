@@ -1,6 +1,8 @@
 # Public beta validation
 
-Current candidate: **0.1.0b2** (`v0.1.0-beta.2`). This is a beta candidate, not a claim that packages have been published. Use the exact release's validation receipt and download assets to establish publication and native results.
+This is the historical beta record. For the **1.0.0 release candidate**, see [RELEASE-CANDIDATE.md](RELEASE-CANDIDATE.md). The user-observation gate below is preserved and has not been marked as passed by the candidate's automated tests.
+
+Historical candidate: **0.1.0b2** (`v0.1.0-beta.2`). Use the exact release's validation receipt and download assets to establish publication and native results.
 
 ## Beta.2 changes and validation
 

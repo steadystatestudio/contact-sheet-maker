@@ -47,7 +47,11 @@ def main():
         w.resize(1280,900); app.processEvents()
         for theme in ['dark','light']:
             apply_theme(app,theme); app.processEvents(); w.grab().save(str(OUT/f'screenshot-{theme}.png'))
-        w.resize(890,700); app.processEvents(); w.grab().save(str(OUT/'screenshot-compact.png'))
+        w.resize(890,700)
+        # Reflowing the output grid posts a second layout pass. Capture the
+        # settled interface, not its intermediate wide-to-compact frame.
+        app.processEvents(); app.processEvents()
+        w.grab().save(str(OUT/'screenshot-compact.png'))
         outputs=OUT/'sample-export'; outputs.mkdir(exist_ok=True)
         export_sheets(w.model.photos,w.sheet_settings(),outputs,stem='landscape-studies',format='PDF',overwrite=True)
         export_sheets(w.model.photos,w.sheet_settings(),outputs,stem='landscape-studies',format='JPEG',overwrite=True)

@@ -1,4 +1,4 @@
-"""Build native portable beta packages on Windows or Linux x86-64.
+"""Build native portable packages on Windows or Linux x86-64.
 
 The AppDir layout follows Steady State Studio's MIT-licensed File Renamer:
 https://github.com/steadystatestudio/file-renamer/tree/342f2cebf672578ff27f299eda466da7c2df4b96

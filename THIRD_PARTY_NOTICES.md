@@ -1,7 +1,7 @@
 # Source provenance and third-party notices
 
-Contact Sheet Maker public beta. Application source is MIT-licensed. The manual
-release workflow stages a draft prerelease; publishing remains a separate review.
+Contact Sheet Maker. Application source is MIT-licensed. The manual
+release workflow stages a draft candidate; publishing remains a separate review.
 
 ## Steady State Studio design and adapted code
 
@@ -18,6 +18,12 @@ The current sources, READMEs, MIT licenses, and actual repository screenshots we
 The contact-sheet engine, new UI behavior, contact-sheet SVG app/arrow icons, tests, and generated landscape sample illustrations were created for this project. No external stock photographs are included. Adobe Bridge documentation was considered only as a functional benchmark, not as a visual/source template.
 
 ## Runtime and build dependencies
+
+Test-only ICC fixtures in `tests/fixtures/icc` come from saucecontrol/Compact-ICC-Profiles
+at commit `bdd84663061bc4ae95ca70decff54f581e27f702`, under CC0-1.0. Their license,
+source URL and SHA-256 digests are retained beside the files. They are used with
+synthetic images to verify CMYK, wide-gamut RGB and grayscale conversion; they are
+not application defaults or packaged runtime assets.
 
 - Python: PSF license. https://www.python.org/psf/license/
 - PySide6 / Shiboken6 / Qt 6.11.2: LGPL-3.0-only alternative used by this build. Dynamic libraries remain separate in a one-folder bundle and may be replaced with compatible modified libraries. No application restriction is imposed on reverse engineering for debugging modifications to these libraries. LGPLv3 and GPLv3 texts are included under `packaging/licenses`.

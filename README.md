@@ -2,7 +2,7 @@
 
 A free, offline Steady State Studio desktop utility for turning local JPEG and PNG photos into printable contact sheets.
 
-**Public beta — 0.1.0b2.** Every feature is free. No account, uploads, watermarks, or feature gates. Real-user preference and repeat use are still being evaluated.
+**1.0.0 release candidate.** Every feature is free. No account, uploads, watermarks, or feature gates. This source version is being prepared for release; see [candidate validation and remaining gates](docs/RELEASE-CANDIDATE.md). Real-user preference and repeat use are still being evaluated.
 
 [Studio website](https://steady-state-studio.steadystatestudio1.workers.dev/) · [Versioned downloads](https://github.com/steadystatestudio/contact-sheet-maker/releases) · [Report a problem](https://github.com/steadystatestudio/contact-sheet-maker/issues) · [Donate on Ko-fi](https://ko-fi.com/steadystatestudio)
 
@@ -15,7 +15,7 @@ A free, offline Steady State Studio desktop utility for turning local JPEG and P
 - A4 or US Letter, portrait/landscape, rows/columns, millimetre margins/gaps, filename captions and optional sheet title.
 - Three print presets (12, 20, or 6 photos); last layout/export choices and window arrangement are remembered locally.
 - Resizable table/preview split, page navigation and a scrollable full-resolution Zoom preview. Short work areas scroll independently while export and status stay visible; output controls stack in narrow windows, and restored windows fit the available monitor.
-- Multipage PDF or numbered JPEG sheets at 150, 200 or 300 dpi. Photos always fit without cropping; EXIF rotation is honoured.
+- Multipage PDF or numbered JPEG sheets at 150, 200 or 300 dpi. Photos always fit without cropping; EXIF rotation is honoured. Embedded color profiles are converted to sRGB before transparent areas are placed on white paper.
 - System/Light/Dark appearance, keyboard shortcuts, readable focus borders and accessible control labels.
 - Background import, preview and export with cancellation. Close during work asks first and waits for safe cleanup.
 - Import feedback stays visible after the preview finishes: added, already-listed and unreadable photos are counted separately. Missing or unreadable selections are reported while valid selections are added. Cancelling an import leaves the photo list unchanged.
@@ -35,15 +35,15 @@ python -m contact_sheet
 
 For the exact development dependency versions use `python -m pip install -r requirements-build-lock.txt` first. All packages come from the normal Python package index; no global installation is necessary. Installing requires Internet access; the running app does not.
 
-### Linux beta downloads
+### Linux downloads
 
-Use the assets and SHA-256 checksums on the exact beta release. Download `Contact-Sheet-Maker-x86_64.AppImage`, make it executable, and run it. Where FUSE is unavailable, use `APPIMAGE_EXTRACT_AND_RUN=1`. A portable `Contact-Sheet-Maker-linux-x86_64.tar.gz` is also available. The release pipeline builds on Ubuntu 22.04 and verifies the same package bytes on Ubuntu 24.04; consult its validation receipt before assuming those checks passed. A graphical desktop and normal Qt/X11 or Wayland libraries are required. Other Linux distributions, ARM, and macOS have no supported beta download.
+Use the assets and SHA-256 checksums on the exact published release. Download `Contact-Sheet-Maker-x86_64.AppImage`, make it executable, and run it. Where FUSE is unavailable, use `APPIMAGE_EXTRACT_AND_RUN=1`. A portable `Contact-Sheet-Maker-linux-x86_64.tar.gz` is also available. The release pipeline builds on Ubuntu 22.04 and verifies the same package bytes on Ubuntu 24.04; consult its validation receipt before assuming those checks passed. A graphical desktop and normal Qt/X11 or Wayland libraries are required. Other Linux distributions, ARM, and macOS have no supported download.
 
 ### Windows
 
-Extract `Contact-Sheet-Maker-windows-x86_64.zip` from the versioned release and run `Contact-Sheet-Maker/Contact-Sheet-Maker.exe`. Keep the `_internal` folder beside it. Python is bundled; no administrator installation is required. **This beta is unsigned** and Windows may show a reputation warning. Verify the source and checksum, follow your organisation's policy, and do not disable security protections to run it.
+Extract `Contact-Sheet-Maker-windows-x86_64.zip` from the versioned release and run `Contact-Sheet-Maker/Contact-Sheet-Maker.exe`. Keep the `_internal` folder beside it. Python is bundled; no administrator installation is required. **Windows packages are unsigned** and Windows may show a reputation warning. Verify the source and checksum, follow your organisation's policy, and do not disable security protections to run it.
 
-See `packaging/README-WINDOWS.txt` for native build commands and the remaining interactive checklist. Automated checks run on Windows Server 2022; interactive Windows 10/11, screen-reader, and high-DPI hardware behavior are beta feedback targets, not certified coverage.
+See `packaging/README-WINDOWS.txt` for native build commands and the remaining interactive checklist. Automated checks run on Windows Server 2022; interactive Windows 10/11, screen-reader, and high-DPI hardware behavior are ongoing validation targets, not certified coverage.
 
 ## Workflow
 
@@ -61,6 +61,8 @@ PDF page dimensions match the selected paper. Complete filename captions wrap to
 No telemetry, automatic upload, cloud account, subscription, watermark, or feature gate. Donate opens the Studio's Ko-fi page in your default browser only when clicked. Donations are optional; checkout is handled on Ko-fi, outside the app. Help and processing are local. The app saves ordinary UI preferences and last chosen folder paths with Qt settings; the loaded photo list is not persisted.
 
 Original photos are never modified. Output names cannot replace source files, including hardlink aliases. Files are inspected as actual JPEG/PNG content, corruption is reported, and images above 60 million pixels are refused. Very large compressed files can still take time to read; native decoder calls cannot be interrupted halfway through, so cancellation is checked between safe steps. Source fingerprints detect photos changed since import or while generating sheets and stop export rather than quietly using mixed versions.
+
+Valid embedded ICC profiles, including CMYK JPEG and wide-gamut RGB profiles, are converted to sRGB for both previews and exported pages. Invalid or incompatible profiles are reported instead of silently changing colors. Untagged RGB photos are treated as sRGB; for predictable CMYK colors, export a tagged JPEG or convert it to sRGB first. Transparent pixels are blended onto white after color conversion. Source EXIF/GPS and other personal metadata are not copied into sheets.
 
 All sheets render into a temporary directory inside the selected destination before commit. Existing outputs require explicit replacement; exclusive installation rejects unexpected files that appear during export. Cancellation and ordinary commit failures roll back installed files and restore previous outputs. If another process blocks restoration, the error identifies retained backups for manual recovery. If export succeeds but old backups cannot be removed, the app confirms the sheets were saved and lists those backups separately.
 
@@ -97,6 +99,6 @@ For a native folder/archive build without AppImage tooling, use `python scripts/
 - No direct printer integration, crop-to-fill, borders, per-photo caption editing, saved projects or recursive folder traversal.
 - Unicode paths work. Caption glyph coverage is font-dependent; DejaVu Sans is bundled for broad Latin/Greek/Cyrillic coverage, with platform CJK font fallback where installed. Emoji and every writing system are not guaranteed.
 - The 60M-pixel safety cap and one-source-at-a-time rendering bound large decoded images, but this is not a hardened untrusted-file sandbox. PNG decoding may still require substantial memory. PDF encoding retains compressed document data, so very large documents can consume increasing memory.
-- Interactive Windows behavior, high-DPI displays, screen readers, physical USB filesystems, distribution signing and wider Linux compatibility remain beta feedback targets. Native CI results are recorded per commit and do not imply human QA. See `docs/BETA-RELEASE.md` for the version 1.0 gate.
+- Interactive Windows behavior, high-DPI displays, screen readers, physical USB filesystems, distribution signing and wider Linux compatibility remain ongoing validation targets. Native CI results are recorded per commit and do not imply human QA. See `docs/RELEASE-CANDIDATE.md` for current release gates and `docs/BETA-RELEASE.md` for historical beta evidence.
 
 MIT license, copyright © 2026 Steady State Studio. The actual File Renamer theme/status component was adapted under its MIT license; exact provenance and dependency notices are in `THIRD_PARTY_NOTICES.md`. Every feature remains free, with optional support never required to finish a job.

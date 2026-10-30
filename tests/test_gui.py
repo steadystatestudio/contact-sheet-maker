@@ -239,8 +239,12 @@ def test_small_window_controls_visible(window,app):
 def test_compact_window_keeps_export_and_status_reachable(window, app, size):
     from PySide6.QtCore import QPoint, QRect
     window.resize(*size)
-    app.processEvents()
+    app.processEvents(); app.processEvents()
+    toolbar = (window.add_files, window.add_folder, window.clear_button,
+               window.help_button, window.donate_button, window.settings_button)
+    toolbar_positions = [widget.mapTo(window, QPoint()) for widget in toolbar]
     assert window.width() <= size[0] and window.height() <= size[1]
+    assert window.output_controls.height() >= window.output_controls.minimumSizeHint().height()
     for widget in (window.export_button, window.status, window.format_combo, window.stem_input):
         bounds = QRect(widget.mapTo(window, QPoint()), widget.size())
         assert window.rect().contains(bounds), (widget.objectName(), bounds, window.rect())
@@ -250,6 +254,10 @@ def test_compact_window_keeps_export_and_status_reachable(window, app, size):
         app.processEvents()
         bounds = QRect(window.title_input.mapTo(window.work_scroll.viewport(), QPoint()), window.title_input.size())
         assert window.work_scroll.viewport().rect().intersects(bounds)
+    for widget, position in zip(toolbar, toolbar_positions):
+        assert widget.mapTo(window, QPoint()) == position
+        assert window.rect().contains(QRect(position, widget.size()))
+        assert not window.work_scroll.isAncestorOf(widget)
 
 
 def test_enlarged_text_keeps_actions_outside_scroll(window, app):

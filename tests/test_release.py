@@ -33,7 +33,7 @@ sources = load("fetch_release_sources")
 def test_published_or_wrong_release_is_never_mutated(change):
     value = {"draft": True, "prerelease": True, "tag_name": "v0.1.0-beta.1", "target_commitish": "a" * 40}
     value.update(change)
-    with pytest.raises(ValueError, match="draft prerelease"):
+    with pytest.raises(ValueError, match="exact-commit draft"):
         release.validate_draft(value, "v0.1.0-beta.1", "a" * 40)
 
 
@@ -54,7 +54,7 @@ def test_candidate_requires_matching_tag_version_and_main_ancestor(monkeypatch):
         release.validate_candidate("v0.1.0-beta.1", "c" * 40)
 
 
-@pytest.mark.parametrize("tag,commit", [("main", "a" * 40), ("v1.0.0", "a" * 40), ("v0.1.0-beta.1;evil", "a" * 40), ("v0.1.0-beta.1", "main")])
+@pytest.mark.parametrize("tag,commit", [("main", "a" * 40), ("v1.0", "a" * 40), ("v01.0.0", "a" * 40), ("v1.0.0-beta.0", "a" * 40), ("v0.1.0-beta.1;evil", "a" * 40), ("v0.1.0-beta.1", "main")])
 def test_invalid_candidate_never_invokes_git(tag, commit, monkeypatch):
     monkeypatch.setattr(release, "git", lambda *args: pytest.fail("invalid input reached Git"))
     with pytest.raises(ValueError):
@@ -218,6 +218,46 @@ def candidate_git(project_version="0.1.0b2", application_source='__version__ = "
     return git
 
 
+def test_stable_candidate_requires_both_stable_versions_and_main_ancestry(monkeypatch):
+    calls = []
+    monkeypatch.setattr(release, "git", candidate_git("1.0.0", '__version__ = "1.0.0"'))
+    monkeypatch.setattr(release.subprocess, "run", lambda command, **kwargs: calls.append(command))
+    assert release.validate_candidate("v1.0.0", "a" * 40) == "b" * 40
+    assert calls[0][-2:] == ["a" * 40, "origin/main"]
+    calls.clear()
+    monkeypatch.setattr(release, "git", candidate_git("1.0.0", '__version__ = "1.0.0b1"'))
+    with pytest.raises(ValueError, match="version"):
+        release.validate_candidate("v1.0.0", "a" * 40)
+    assert not calls
+
+
+@pytest.mark.parametrize("tag, prerelease", [("v1.0.0", False), ("v1.0.0-beta.1", True)])
+def test_each_release_channel_requires_its_exact_unpublished_draft(tag, prerelease):
+    draft = {"tag_name": tag, "target_commitish": "a" * 40, "draft": True, "prerelease": prerelease}
+    release.validate_draft(draft, tag, "a" * 40)
+    for change in ({"draft": False}, {"prerelease": not prerelease}, {"target_commitish": "main"},
+                   {"target_commitish": "b" * 40}, {"tag_name": "v9.9.9"}):
+        with pytest.raises(ValueError, match="exact-commit draft"):
+            release.validate_draft({**draft, **change}, tag, "a" * 40)
+
+
+@pytest.mark.parametrize("tag, prerelease", [("v1.0.0", False), ("v1.0.0-beta.1", True)])
+def test_init_stages_both_channels_as_drafts_never_publishes(tmp_path, monkeypatch, tag, prerelease):
+    args = SimpleNamespace(tag=tag, commit="a" * 40)
+    writes = []
+    monkeypatch.setattr(release, "validate_candidate", lambda *a: "b" * 40)
+    monkeypatch.setattr(release, "ensure_remote_tag", lambda *a: None)
+    monkeypatch.setattr(release, "matching_releases", lambda *a: [])
+    monkeypatch.setattr(release, "api", lambda path, payload: writes.append(payload) or {"id": 7})
+    monkeypatch.setattr(release, "invalidate_receipt", lambda *a: None)
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "output"))
+    release.init(args)
+    assert len(writes) == 1
+    assert writes[0]["draft"] is True and writes[0]["prerelease"] is prerelease
+    assert writes[0]["tag_name"] == tag and writes[0]["target_commitish"] == args.commit
+    assert "product-maturity" in writes[0]["body"]
+
+
 @pytest.mark.parametrize("application_source", [
     '__version__ = "0.1.0b1"', '', '__version__ = "0.1.0b2"\n__version__ = "0.1.0b2"',
     '__version__ = calculate_version()',
@@ -349,7 +389,7 @@ def test_init_never_recreates_deleted_tag_of_published_or_unrelated_release(monk
     monkeypatch.setattr(release, "validate_candidate", lambda *a: "b" * 40)
     monkeypatch.setattr(release, "api", lambda *a: [existing])
     monkeypatch.setattr(release, "ensure_remote_tag", lambda *a: pytest.fail("unrelated release reached tag write"))
-    with pytest.raises(ValueError, match="draft prerelease"):
+    with pytest.raises(ValueError, match="exact-commit draft"):
         release.init(args)
 
 
@@ -382,7 +422,7 @@ def test_published_release_on_second_page_blocks_any_tag_write(monkeypatch):
     monkeypatch.setattr(release, "validate_candidate", lambda *a: "b" * 40)
     monkeypatch.setattr(release, "api", api)
     monkeypatch.setattr(release, "ensure_remote_tag", lambda *a: pytest.fail("published release reached tag write"))
-    with pytest.raises(ValueError, match="draft prerelease"):
+    with pytest.raises(ValueError, match="exact-commit draft"):
         release.init(args)
     assert len(calls) == 2 and calls[-1].endswith("page=2")
 

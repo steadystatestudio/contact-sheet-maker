@@ -18,7 +18,7 @@ from typing import Callable, Iterable
 import unicodedata
 import warnings
 
-from PIL import Image, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageCms, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
 
 
 _WINDOWS = os.name == "nt"
@@ -204,6 +204,51 @@ def _hash_stream(stream, cancel=None) -> str:
     return digest.hexdigest()
 
 
+def _srgb_on_white(image: Image.Image) -> Image.Image:
+    """Honor embedded color profiles before flattening transparency onto paper."""
+    color = image
+    alpha = None
+    rgb = None
+    try:
+        if image.mode in {"RGBA", "LA"} or "transparency" in image.info:
+            with image.convert("RGBA") as rgba:
+                alpha = rgba.getchannel("A")
+        if image.mode not in {"RGB", "CMYK", "LAB", "L"}:
+            color = image.convert("L" if image.mode == "LA" else "RGB")
+        profile = image.info.get("icc_profile")
+        if profile is None:
+            rgb = color.convert("RGB")
+        else:
+            try:
+                rgb = ImageCms.profileToProfile(
+                    color, ImageCms.ImageCmsProfile(io.BytesIO(profile)),
+                    ImageCms.createProfile("sRGB"), outputMode="RGB",
+                )
+            except (ImageCms.PyCMSError, OSError, TypeError, ValueError) as exc:
+                raise ValueError(
+                    "Invalid or unsupported color profile. Export this photo as sRGB and add it again."
+                ) from exc
+        if alpha is not None:
+            paper = Image.new("RGB", rgb.size, "white")
+            try:
+                paper.paste(rgb, mask=alpha)
+                return paper
+            except BaseException:
+                paper.close()
+                raise
+        # The page/thumbnail needs only sRGB pixels, never source EXIF/GPS metadata.
+        rgb.info.clear()
+        result, rgb = rgb, None
+        return result
+    finally:
+        if color is not image:
+            color.close()
+        if alpha is not None:
+            alpha.close()
+        if rgb is not None:
+            rgb.close()
+
+
 def _load_photo(path: Path, target: tuple[int, int], expected: str | None = None,
                 cancel=None) -> tuple[Image.Image, tuple[int, int], str]:
     """Decode one source, using JPEG decoder downsampling before allocation."""
@@ -236,13 +281,7 @@ def _load_photo(path: Path, target: tuple[int, int], expected: str | None = None
                 oriented = ImageOps.exif_transpose(image)
                 try:
                     oriented.thumbnail(target, Image.Resampling.LANCZOS)
-                    if oriented.mode in {"RGBA", "LA"} or "transparency" in oriented.info:
-                        rgba = oriented.convert("RGBA")
-                        rgb = Image.new("RGB", rgba.size, "white")
-                        rgb.paste(rgba, mask=rgba.getchannel("A"))
-                        rgba.close()
-                    else:
-                        rgb = oriented.convert("RGB")
+                    rgb = _srgb_on_white(oriented)
                 finally:
                     oriented.close()
                 if _stat_signature(os.fstat(stream.fileno())) != before:

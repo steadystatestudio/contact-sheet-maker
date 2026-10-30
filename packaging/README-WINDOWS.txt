@@ -12,7 +12,7 @@ Server 2022; consult the exact commit run for its current result.
 
 Then run dist\Contact-Sheet-Maker\Contact-Sheet-Maker.exe.
 Keep the entire _internal folder alongside the EXE. All features are free.
-This beta is unsigned. Windows may show an unknown-publisher warning. Verify
+Windows packages are unsigned. Windows may show an unknown-publisher warning. Verify
 the downloaded ZIP against the release SHA256SUMS-Windows.txt before use.
 
 Recommended native smoke checks:
@@ -22,8 +22,8 @@ Recommended native smoke checks:
 - Cancel import/export and close while work runs
 - NTFS and exFAT destination behavior, HiDPI display, screen reader labels
 
-The native build script does not publish. A separate manual beta workflow
-retains tested packages and matching library source in a draft prerelease;
+The native build script does not publish. A separate manual release workflow
+retains tested packages and matching library source in a draft candidate;
 publication follows review. It never uploads your photographs.
 
 The GitHub Actions workflow also builds and smoke-tests Windows.

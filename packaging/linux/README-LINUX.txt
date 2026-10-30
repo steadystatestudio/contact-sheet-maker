@@ -1,4 +1,4 @@
-Contact Sheet Maker: Linux x86-64 public beta
+Contact Sheet Maker: Linux x86-64
 
 AppImage:
   chmod +x Contact-Sheet-Maker-x86_64.AppImage

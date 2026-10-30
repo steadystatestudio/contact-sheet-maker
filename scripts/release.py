@@ -1,9 +1,9 @@
-"""Stage and verify a manual beta release. This tool never publishes a release.
+"""Stage and verify a manual release candidate. This tool never publishes a release.
 
-The reviewed workflow may create a missing beta tag after source validation;
+The reviewed workflow may create a missing stable or beta tag after source validation;
 existing tags are never moved. All release-asset operations require the selected
-exact-commit draft prerelease. No personal settings or input photos are included
-in QA archives. Run only from the reviewed release workflow.
+exact-commit draft with the tag's matching release channel. No personal settings
+or input photos are included in QA archives. Run only from the reviewed release workflow.
 """
 from __future__ import annotations
 
@@ -33,22 +33,28 @@ def git(*arguments: str) -> str:
     return subprocess.check_output(["git", *arguments], cwd=ROOT, text=True).strip()
 
 
-def validate_candidate(tag: str, commit: str) -> str:
-    match = re.fullmatch(r"v(\d+\.\d+\.\d+)-beta\.(\d+)", tag)
+def tag_version(tag: str) -> tuple[str, bool]:
+    """Return canonical package version and prerelease flag; reject other refs."""
+    number = r"(?:0|[1-9][0-9]*)"
+    match = re.fullmatch(rf"v({number}\.{number}\.{number})(?:-beta\.([1-9][0-9]*))?", tag)
     if not match:
-        raise ValueError("Use a vX.Y.Z-beta.N tag")
+        raise ValueError("Use a vX.Y.Z or vX.Y.Z-beta.N tag")
+    return (f"{match[1]}b{match[2]}", True) if match[2] else (match[1], False)
+
+
+def validate_candidate(tag: str, commit: str) -> str:
+    expected_version, _ = tag_version(tag)
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("Expected commit must be a complete lowercase Git SHA")
     if git("rev-parse", "--verify", f"{commit}^{{commit}}") != commit:
         raise ValueError("Source does not match the expected commit")
     project = tomllib.loads(git("show", f"{commit}:pyproject.toml"))
-    expected_version = f"{match[1]}b{match[2]}"
     module = ast.parse(git("show", f"{commit}:src/contact_sheet/__init__.py"))
     versions = [node.value for node in module.body if isinstance(node, ast.Assign)
                 and any(isinstance(target, ast.Name) and target.id == "__version__" for target in node.targets)]
     if (project["project"]["version"] != expected_version or len(versions) != 1
             or ast.literal_eval(versions[0]) != expected_version):
-        raise ValueError("Beta tag does not match the application version")
+        raise ValueError("Release tag does not match the application version")
     subprocess.run(["git", "merge-base", "--is-ancestor", commit, "origin/main"], cwd=ROOT, check=True)
     return git("rev-parse", f"{commit}^{{tree}}")
 
@@ -63,9 +69,10 @@ def api(path: str, payload=None):
 
 
 def validate_draft(release: dict, tag: str, commit: str) -> None:
-    if (release.get("draft") is not True or release.get("prerelease") is not True
+    _, prerelease = tag_version(tag)
+    if (release.get("draft") is not True or release.get("prerelease") is not prerelease
             or release.get("tag_name") != tag or release.get("target_commitish") != commit):
-        raise ValueError("Refusing to modify anything except the selected exact-commit draft prerelease")
+        raise ValueError("Refusing to modify anything except the selected exact-commit draft with matching release channel")
 
 
 def verify_remote_tag(tag: str, commit: str) -> None:
@@ -74,12 +81,12 @@ def verify_remote_tag(tag: str, commit: str) -> None:
     for _ in range(10):
         if obj.get("type") == "commit":
             if obj.get("sha") != commit:
-                raise ValueError("Remote beta tag moved away from the reviewed commit")
+                raise ValueError("Remote release tag moved away from the reviewed commit")
             return
         if obj.get("type") != "tag" or not re.fullmatch(r"[0-9a-f]{40}", obj.get("sha", "")):
             break
         obj = api(f"repos/{REPOSITORY}/git/tags/{obj['sha']}")["object"]
-    raise ValueError("Remote beta tag does not resolve to a commit")
+    raise ValueError("Remote release tag does not resolve to a commit")
 
 
 def ensure_remote_tag(tag: str, commit: str) -> None:
@@ -88,10 +95,10 @@ def ensure_remote_tag(tag: str, commit: str) -> None:
     refs = api(f"repos/{REPOSITORY}/git/matching-refs/tags/{tag}")
     if (not isinstance(refs, list) or any(not isinstance(ref, dict)
             or not isinstance(ref.get("ref"), str) for ref in refs)):
-        raise ValueError("Cannot establish whether the reviewed beta tag exists")
+        raise ValueError("Cannot establish whether the reviewed release tag exists")
     matches = [ref for ref in refs if ref["ref"] == target]
     if len(matches) > 1:
-        raise ValueError("Duplicate beta tag refs in GitHub response")
+        raise ValueError("Duplicate release tag refs in GitHub response")
     if not matches:
         try:
             api(f"repos/{REPOSITORY}/git/refs", {"ref": target, "sha": commit})
@@ -180,9 +187,10 @@ def matching_releases(tag: str) -> list[dict]:
 
 def init(args) -> None:
     tree = validate_candidate(args.tag, args.commit)
+    _, prerelease = tag_version(args.tag)
     matches = matching_releases(args.tag)
     if len(matches) > 1:
-        raise ValueError("Multiple releases refer to the reviewed beta tag")
+        raise ValueError("Multiple releases refer to the reviewed release tag")
     if matches:
         release = matches[0]
         # Never recreate a deleted tag belonging to a published or unrelated
@@ -192,9 +200,9 @@ def init(args) -> None:
     if not matches:
         release = api(f"repos/{REPOSITORY}/releases", {
             "tag_name": args.tag, "target_commitish": args.commit, "draft": True,
-            "prerelease": True, "name": f"Contact Sheet Maker {args.tag} (beta)",
-            "body": "Draft beta candidate. Do not publish until RELEASE-READY.json exists and "
-                    "privacy, donation destination and native review gates are complete. "
+            "prerelease": prerelease, "name": f"Contact Sheet Maker {args.tag}" + (" (beta)" if prerelease else ""),
+            "body": "Draft release candidate. Do not publish until RELEASE-READY.json exists and "
+                    "privacy, donation destination, native review and product-maturity gates are resolved. "
                     "All features are free. Packages are unsigned. This workflow never publishes.",
         })
     args.release_id = str(release["id"])
@@ -335,16 +343,18 @@ def finalize(args) -> None:
     verify_remote_tag(args.tag, args.commit)
     ready = json_file(directory / "RELEASE-READY.json", {
         "status": "automated-checks-passed-awaiting-publication-review", "draft": True,
+        "prerelease": tag_version(args.tag)[1],
         "source_commit": args.commit, "source_tree": args.tree, "tag": args.tag,
         "run_id": os.environ.get("GITHUB_RUN_ID"), "files": records,
         "checks": ["Windows native tests/build/smoke", "Ubuntu22 native tests/build/bundle and AppImage smoke",
                    "Ubuntu24 exact retained Linux bytes and BUILD-INFO verified and smoke-tested",
                    "matching Qt/PySide/Shiboken source archives retained and digest-verified"],
         "remaining_review": ["public identity and binary metadata", "donation checkout and receipts",
-                             "native interactive beta review", "five-user criteria before 1.0"],
+                             "native interactive review", "five-user criteria before 1.0 or explicit product-maturity decision"],
+        "user_observation_gate": "Not evaluated by automation; requires separate evidence or an explicit product-maturity decision.",
     })
     upload(args, [ready])
-    print("Automated gates passed. The release remains a draft prerelease; publication is a separate reviewed action.")
+    print("Automated gates passed. The release remains a draft; publication is a separate reviewed action.")
 
 
 def main(argv=None) -> int:

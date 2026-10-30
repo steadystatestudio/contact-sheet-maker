@@ -69,4 +69,4 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN=1 python scripts/smoke_bundle.py dist/Contact-Sheet-Maker-x86_64.AppImage
       - name: Report validation
         shell: bash
-        run: echo "Native tests, package build and packaged smoke checks passed. Public candidates are staged with the manual beta release workflow." >> "$GITHUB_STEP_SUMMARY"
+        run: echo "Native tests, package build and packaged smoke checks passed. Public candidates are staged with the manual reviewed release workflow." >> "$GITHUB_STEP_SUMMARY"

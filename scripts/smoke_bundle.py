@@ -25,6 +25,10 @@ def verify_output(directory: Path) -> dict:
     after = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in inputs}
     if before != after or not result.get('originals_unchanged'):
         raise RuntimeError('Packaged export modified an input')
+    for path in inputs:
+        with Image.open(path) as image:
+            if not image.info.get('icc_profile'):
+                raise RuntimeError('Packaged color-profile import test was incomplete')
     pdf = PdfReader(directory / 'outputs/smoke.pdf')
     if len(pdf.pages) != 2:
         raise RuntimeError('Packaged PDF has the wrong page count')
