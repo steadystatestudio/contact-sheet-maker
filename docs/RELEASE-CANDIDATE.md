@@ -1,6 +1,6 @@
-# Contact Sheet Maker 1.0.0 candidate
+# Contact Sheet Maker 1.0.0 — historical prepublication record
 
-Prepared 2026-10-30. This document describes a candidate, not a published release or a claim of observed user preference. The previous beta record remains in [BETA-RELEASE.md](BETA-RELEASE.md).
+Prepared 2026-10-30 before publication. Version [1.0.0 is now published](https://github.com/steadystatestudio/contact-sheet-maker/releases/tag/v1.0.0); its [retained validation receipt](https://github.com/steadystatestudio/contact-sheet-maker/releases/download/v1.0.0/RELEASE-READY.json) identifies the exact release source, native checks and package hashes. The sections below preserve the evidence and remaining checks as recorded before publication, including the unmeasured usability and demand targets. They do not claim observed user preference. The previous beta record remains in [BETA-RELEASE.md](BETA-RELEASE.md).
 
 ## Changes being verified
 
