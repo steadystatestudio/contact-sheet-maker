@@ -1,6 +1,6 @@
 # Public beta validation
 
-This is the historical beta record. For the **1.0.0 release candidate**, see [RELEASE-CANDIDATE.md](RELEASE-CANDIDATE.md). The user-observation gate below is preserved and has not been marked as passed by the candidate's automated tests.
+This is the historical beta record. For the **1.0.0 release candidate**, see [RELEASE-CANDIDATE.md](RELEASE-CANDIDATE.md). The user-observation target below is preserved as ongoing usability research and has not been marked as passed by automated tests. The current stable-release criteria concern verified features, file safety, native artifacts and truthful support limits; they do not assert product-market fit.
 
 Historical candidate: **0.1.0b2** (`v0.1.0-beta.2`). Use the exact release's validation receipt and download assets to establish publication and native results.
 
@@ -51,8 +51,8 @@ The [published beta release](https://github.com/steadystatestudio/contact-sheet-
 
 Automated Qt smoke tests do not certify a human's interactive experience, screen readers, multiple monitors, high-DPI hardware, or physical removable filesystems. These remain beta feedback targets. Linux distribution support is limited to the exact environments recorded by the release receipt.
 
-## Version 1.0 gate
+## Historical version 1.0 observation target — ongoing research
 
 Observe five people who already make proof sheets, using non-sensitive material and their real comparison workflow. At least four must finish unaided, three must prefer this workflow, and two must voluntarily return for another job. There must be no silent omission, clipped identifying caption, or source-file modification in the tested corpus. Fix observed barriers and repeat the relevant checks.
 
-Downloads are not unique users. Voluntary donation attribution, repeat use, support burden, and maintenance time are separate evidence. No revenue forecast or final-release claim is made by this beta.
+Downloads are not unique users. Voluntary donation attribution, repeat use, support burden, and maintenance time are separate evidence. No revenue forecast or human-validation claim is made by the technical 1.0 release.

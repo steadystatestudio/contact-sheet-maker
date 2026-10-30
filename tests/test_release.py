@@ -255,7 +255,7 @@ def test_init_stages_both_channels_as_drafts_never_publishes(tmp_path, monkeypat
     assert len(writes) == 1
     assert writes[0]["draft"] is True and writes[0]["prerelease"] is prerelease
     assert writes[0]["tag_name"] == tag and writes[0]["target_commitish"] == args.commit
-    assert "product-maturity" in writes[0]["body"]
+    assert "native technical review" in writes[0]["body"]
 
 
 @pytest.mark.parametrize("application_source", [

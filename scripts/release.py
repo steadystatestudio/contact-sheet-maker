@@ -202,7 +202,7 @@ def init(args) -> None:
             "tag_name": args.tag, "target_commitish": args.commit, "draft": True,
             "prerelease": prerelease, "name": f"Contact Sheet Maker {args.tag}" + (" (beta)" if prerelease else ""),
             "body": "Draft release candidate. Do not publish until RELEASE-READY.json exists and "
-                    "privacy, donation destination, native review and product-maturity gates are resolved. "
+                    "privacy, donation destination and native technical review gates are complete. "
                     "All features are free. Packages are unsigned. This workflow never publishes.",
         })
     args.release_id = str(release["id"])
@@ -350,8 +350,8 @@ def finalize(args) -> None:
                    "Ubuntu24 exact retained Linux bytes and BUILD-INFO verified and smoke-tested",
                    "matching Qt/PySide/Shiboken source archives retained and digest-verified"],
         "remaining_review": ["public identity and binary metadata", "donation checkout and receipts",
-                             "native interactive review", "five-user criteria before 1.0 or explicit product-maturity decision"],
-        "user_observation_gate": "Not evaluated by automation; requires separate evidence or an explicit product-maturity decision.",
+                             "native package review and truthful platform/accessibility limits"],
+        "ongoing_usability_research": "Five-person observation target remains unevidenced; technical release checks do not establish preference, repeat use or demand.",
     })
     upload(args, [ready])
     print("Automated gates passed. The release remains a draft; publication is a separate reviewed action.")

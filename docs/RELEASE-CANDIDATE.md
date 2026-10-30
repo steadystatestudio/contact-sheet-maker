@@ -20,8 +20,11 @@ The native package check also exposed an environment-specific build fault: unrel
 
 ## Remaining release decisions
 
-- Complete native platform tests/build/smoke checks and retain exact package checksums, build receipts, dependency sources and synthetic QA.
+- Stable acceptance requires the documented features and file-safety checks to pass, no known blocking defect, native platform tests/build/smoke checks, and exact package checksums, build receipts, dependency sources and synthetic QA. Publication waits for that technical evidence for the exact candidate.
 - Review the actual package UI and output, public identity/binary metadata and donation destination. Signing, screen-reader behavior, high-DPI/multi-monitor hardware and physical removable filesystems are not certified by offscreen tests.
-- The historical 1.0 user-observation gate calls for five relevant users, four unaided completions, three preferences and two voluntary return jobs. **No such observation evidence is available in this candidate record.** Automation cannot pass this gate. Resolve it through recorded user evidence or an explicit product-maturity decision before publication; do not silently treat passing software tests as proof of demand or repeat use.
+
+## Ongoing usability and demand research
+
+The historical user-observation target calls for five relevant users, four unaided completions, three preferences and two voluntary return jobs. **No such observation evidence is available in this candidate record.** It remains an ongoing research target rather than a technical stable-release prerequisite. Passing software tests does not establish demand, preference, repeat use, accessibility certification or willingness to donate.
 
 All features remain free and donations optional. Donation conversion and sustainable revenue remain unmeasured.

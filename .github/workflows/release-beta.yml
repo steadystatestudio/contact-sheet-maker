@@ -196,4 +196,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python scripts/release.py finalize --tag "$RELEASE_TAG" --commit "$BUILD_SOURCE_COMMIT" --tree "$BUILD_SOURCE_TREE" --release-id "$RELEASE_ID"
-          echo "Automated gates passed. Inspect RELEASE-READY.json and complete privacy, native and product-maturity review before manually publishing. This release is still a draft." >> "$GITHUB_STEP_SUMMARY"
+          echo "Automated gates passed. Inspect RELEASE-READY.json and complete privacy and native technical review before manually publishing. This release is still a draft." >> "$GITHUB_STEP_SUMMARY"
