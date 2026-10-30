@@ -8,7 +8,7 @@ restriction on those rights. Its own source is MIT-licensed.
 
 Matching source
 --------------
-Every published beta must retain all archives named in SOURCE-INDEX.json
+Every published release must retain all archives named in SOURCE-INDEX.json
 as downloadable assets on the SAME GitHub release as the binary packages:
 https://github.com/steadystatestudio/contact-sheet-maker/releases
 The index gives exact versions, official upstream URLs, sizes and SHA-256
