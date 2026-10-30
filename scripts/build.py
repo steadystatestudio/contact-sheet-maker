@@ -70,6 +70,24 @@ def pyinstaller_command(root: Path, target_platform: str) -> list[str]:
     ]
 
 
+def pyinstaller_environment(target_platform: str) -> dict[str, str]:
+    """Keep unrelated tools' DLLs out of a native Windows package.
+
+    PyInstaller searches PATH while resolving binary imports. Poppler and other
+    tools can ship an incompatible icuuc.dll or UCRT under the same name as an
+    OS library; bundling one can prevent Qt from starting on the build machine.
+    Qt/Python package hooks still supply their own package-library directories.
+    Only the PyInstaller child gets this environment; Git/build steps retain PATH.
+    """
+    environment = dict(os.environ)
+    if target_platform == "win32":
+        windows = Path(os.environ.get("SystemRoot", r"C:\Windows"))
+        paths = [Path(sys.executable).resolve().parent, Path(sys.base_prefix),
+                 Path(sys.base_prefix) / "DLLs", windows / "System32", windows]
+        environment["PATH"] = os.pathsep.join(dict.fromkeys(str(path) for path in paths))
+    return environment
+
+
 def verify_qt_subset(bundle: Path) -> None:
     """Fail closed if optional, unreviewed Qt components return to the package."""
     excluded = ("qt6pdf", "qt6virtualkeyboard", "qt6qml", "qt6quick", "qt6webengine", "qt6network")
@@ -262,7 +280,8 @@ def main(argv: list[str] | None = None) -> int:
     dist.mkdir(exist_ok=True)
     os.environ["PYINSTALLER_CONFIG_DIR"] = str(build / "pyinstaller-cache")
     icon_png(root, build / "icon.png")
-    subprocess.run(pyinstaller_command(root, sys.platform), cwd=root, check=True, timeout=1200)
+    subprocess.run(pyinstaller_command(root, sys.platform), cwd=root, check=True, timeout=1200,
+                   env=pyinstaller_environment(sys.platform))
     bundle = dist / NAME
     verify_qt_subset(bundle)
     copy_notices(root, bundle, sys.platform)

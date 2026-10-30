@@ -16,6 +16,8 @@ The complete source suite passed **320 tests, with six symlink tests skipped**, 
 
 Light, dark and compact screenshots were generated from synthetic artwork and inspected. Snapshot generation now waits for the second layout pass when switching to stacked export controls, and the smoke checks require the export group to retain its complete minimum height. The focused layout/smoke recheck passed five tests after this adjustment. The package build's `BUILD-INFO.json`, checksums and smoke report identify the exact candidate bytes; Windows evidence does not establish Linux compatibility. Native Linux and cross-Ubuntu validation remain required from the exact release workflow.
 
+The native package check also exposed an environment-specific build fault: unrelated Poppler/libheif directories on the build host's PATH could supply incompatible ICU/UCRT libraries. The Windows PyInstaller subprocess now searches only the isolated interpreter and Windows directories; other build steps keep their normal environment. A clean-path rebuild passed the actual frozen executable smoke check with 13 ICC-tagged inputs, two PDF/JPEG pages and unchanged source hashes.
+
 ## Remaining release decisions
 
 - Complete native platform tests/build/smoke checks and retain exact package checksums, build receipts, dependency sources and synthetic QA.

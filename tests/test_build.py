@@ -196,6 +196,23 @@ def test_pyinstaller_native_command_paths_and_icon(tmp_path, target_platform):
     assert 'collect_data_files("contact_sheet")' in spec and '"readline"' in spec
 
 
+def test_windows_packaging_does_not_search_unrelated_native_tool_dlls(tmp_path, monkeypatch):
+    tool = tmp_path / "unrelated-poppler"
+    windows = tmp_path / "Windows"
+    monkeypatch.setenv("PATH", str(tool))
+    monkeypatch.setenv("SystemRoot", str(windows))
+    monkeypatch.setenv("BUILD_SOURCE_COMMIT", "a" * 40)
+    environment = build.pyinstaller_environment("win32")
+    paths = environment["PATH"].split(os.pathsep)
+    assert str(tool) not in paths
+    assert str(windows / "System32") in paths
+    assert str(Path(sys.executable).resolve().parent) in paths
+    assert str(Path(sys.base_prefix)) in paths
+    assert environment["BUILD_SOURCE_COMMIT"] == "a" * 40
+    assert os.environ["PATH"] == str(tool), "Other build stages must retain their environment"
+    assert build.pyinstaller_environment("linux")["PATH"] == str(tool)
+
+
 @pytest.mark.parametrize("name", ["Qt6Pdf.dll", "libQt6Pdf.so.6", "Qt6VirtualKeyboard.dll",
                                  "libQt6Qml.so.6", "Qt6Quick.dll", "Qt6WebEngineCore.dll",
                                  "libQt6Network.so.6", "opengl32sw.dll", "libqpdf.so", "libqvnc.so"])
