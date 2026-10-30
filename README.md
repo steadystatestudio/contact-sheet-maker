@@ -4,7 +4,7 @@ A free, offline Steady State Studio desktop utility for turning local JPEG and P
 
 **Public beta — 0.1.0b2.** Every feature is free. No account, uploads, watermarks, or feature gates. Real-user preference and repeat use are still being evaluated.
 
-[Studio website](https://steady-state-studio.rpxjjnqmguarhzkg.chatgpt.site/) · [Versioned downloads](https://github.com/steadystatestudio/contact-sheet-maker/releases) · [Report a problem](https://github.com/steadystatestudio/contact-sheet-maker/issues) · [Donate on Ko-fi](https://ko-fi.com/steadystatestudio)
+[Studio website](https://steady-state-studio.steadystatestudio1.workers.dev/) · [Versioned downloads](https://github.com/steadystatestudio/contact-sheet-maker/releases) · [Report a problem](https://github.com/steadystatestudio/contact-sheet-maker/issues) · [Donate on Ko-fi](https://ko-fi.com/steadystatestudio)
 
 ![Dark interface](docs/screenshot-dark.png)
 
