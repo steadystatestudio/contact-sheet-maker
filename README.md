@@ -4,7 +4,7 @@ A free, offline Steady State Studio desktop utility for turning local JPEG and P
 
 **1.0.0 is released.** Every feature is free. No account, uploads, watermarks, or feature gates. Get the [version 1.0.0 downloads](https://github.com/steadystatestudio/contact-sheet-maker/releases/tag/v1.0.0) and see the [retained validation receipt](https://github.com/steadystatestudio/contact-sheet-maker/releases/download/v1.0.0/RELEASE-READY.json) for its exact source, native checks and package hashes. Real-user preference and repeat use are still being evaluated.
 
-[Studio website](https://steady-state-studio.steadystatestudio1.workers.dev/) · [Versioned downloads](https://github.com/steadystatestudio/contact-sheet-maker/releases) · [Report a problem](https://github.com/steadystatestudio/contact-sheet-maker/issues) · [Donate on Ko-fi](https://ko-fi.com/steadystatestudio)
+[App details](https://steady-state-studio.steadystatestudio1.workers.dev/apps/contact-sheet-maker/) · [Studio website](https://steady-state-studio.steadystatestudio1.workers.dev/) · [Versioned downloads](https://github.com/steadystatestudio/contact-sheet-maker/releases) · [Report a problem](https://github.com/steadystatestudio/contact-sheet-maker/issues) · [Donate on Ko-fi](https://ko-fi.com/steadystatestudio)
 
 ![Dark interface](docs/screenshot-dark.png)
 
