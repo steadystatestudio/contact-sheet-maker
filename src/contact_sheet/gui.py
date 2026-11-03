@@ -316,6 +316,7 @@ class MainWindow(QMainWindow):
         self.splitter.setStretchFactor(0, 2)
         self.splitter.setStretchFactor(1, 3)
         self.splitter.setSizes([430, 610])
+        self.splitter.splitterMoved.connect(lambda *_: self._fit_splitter_contents())
         layout.addWidget(self.splitter, 1)
 
         self.controls = QFrame()
@@ -473,11 +474,24 @@ class MainWindow(QMainWindow):
         self._arrange_toolbar()
         self._arrange_output()
         QTimer.singleShot(0, self._fit_to_screen)
+        QTimer.singleShot(0, self._fit_splitter_contents)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._arrange_toolbar()
         self._arrange_output()
+        if hasattr(self, "splitter"):
+            QTimer.singleShot(0, self._fit_splitter_contents)
+
+    def _fit_splitter_contents(self):
+        """A horizontal splitter must reserve the height of wrapped notes too."""
+        heights = []
+        for index in range(self.splitter.count()):
+            pane = self.splitter.widget(index)
+            layout = pane.layout()
+            heights.append(max(layout.minimumSize().height(),
+                               layout.totalHeightForWidth(pane.width())))
+        self.splitter.setMinimumHeight(max(heights))
 
     def _connect_controls(self):
         self.preset.activated.connect(self._apply_preset)

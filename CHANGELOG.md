@@ -1,7 +1,8 @@
 # Changes
 
-## 1.0.4 — 2026-11-03
+## 1.0.5 — 2026-11-03
 
+- Keep enlarged preview notes below the page preview when a small screen requires scrolling.
 - Restore a useful minimum window size so the preview, everyday controls, task actions and status remain visible together.
 - Measure the layout at the system font size; adapt the minimum to the current monitor and use scrolling when its work area is genuinely too small.
 - Repair undersized restored windows while keeping the system-font improvements.

@@ -75,3 +75,20 @@ def test_larger_font_grows_minimum_without_shrinking_text(sized_window):
     assert window.font().pointSize() == 18
     assert window.minimumWidth() > before.width()
     assert window.minimumHeight() > before.height()
+
+
+def test_enlarged_text_keeps_preview_and_wrapped_note_separate(sized_window):
+    window, area = sized_window
+    area[0] = QRect(0, 0, 1280, 800)
+    app = QApplication.instance()
+    font = QFont(app.font())
+    font.setPointSize(21)
+    app.setFont(font)
+    from contact_sheet.themes import apply_theme
+    apply_theme(app, "dark")
+    window.resize(1, 1)
+    QTest.qWait(150)
+    window._fit_splitter_contents()
+    QTest.qWait(80)
+    assert window.preview.geometry().bottom() < window.preview_note.geometry().top()
+    assert window.preview_note.height() >= window.preview_note.heightForWidth(window.preview_note.width())
