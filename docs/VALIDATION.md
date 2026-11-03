@@ -1,4 +1,4 @@
-# Contact Sheet Maker 1.0.1 validation
+# Contact Sheet Maker 1.0.2 validation
 
 Use the exact release's `RELEASE-READY.json`, platform receipts, package hashes
 and synthetic QA archives to identify the source and checks for a download.

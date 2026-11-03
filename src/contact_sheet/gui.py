@@ -211,21 +211,32 @@ class MainWindow(QMainWindow):
         layout.setSpacing(12)
         self.work_scroll.setWidget(work)
         outer.addWidget(self.work_scroll, 1)
-        toolbar = QHBoxLayout()
+        self.toolbar = QWidget()
+        toolbar = QGridLayout(self.toolbar)
+        toolbar.setContentsMargins(0, 0, 0, 0)
+        self.acquisition = QWidget()
+        acquisition = QHBoxLayout(self.acquisition)
+        acquisition.setContentsMargins(0, 0, 0, 0)
         self.add_files = self._button("Add Photos", self._browse_files, "Choose JPEG or PNG photos · Ctrl+O")
         self.add_folder = self._button("Add Folder", self._browse_folder, "Add JPEG and PNG files in one folder; no subfolders")
         self.clear_button = self._button("Clear", self.clear_photos, "Remove photos from this list; originals stay untouched")
         for widget in (self.add_files, self.add_folder, self.clear_button):
-            toolbar.addWidget(widget)
-        toolbar.addStretch()
+            acquisition.addWidget(widget)
+        self.utility = QWidget()
+        utility = QHBoxLayout(self.utility)
+        utility.setContentsMargins(0, 0, 0, 0)
         self.help_button = self._button("Help", self._help)
         self.donate_button = self._button("Donate", self._open_donate, "Support development on Ko-fi")
         self.settings_button = self._button("Settings", self._settings_dialog)
         for widget in (self.help_button, self.donate_button, self.settings_button):
-            toolbar.addWidget(widget)
+            utility.addWidget(widget)
+        toolbar.addWidget(self.acquisition, 0, 0, Qt.AlignLeft)
+        toolbar.addWidget(self.utility, 0, 1, Qt.AlignRight)
+        toolbar.setColumnStretch(0, 1)
+        self._compact_toolbar = None
         # The shared Studio import/help bar stays available while the workspace
         # scrolls on a short display, like the fixed File Renamer controls.
-        outer.insertLayout(0, toolbar)
+        outer.insertWidget(0, self.toolbar)
 
         self.splitter = QSplitter(Qt.Horizontal)
         self.splitter.setChildrenCollapsible(False)
@@ -256,11 +267,11 @@ class MainWindow(QMainWindow):
         self.table.setWordWrap(False)
         self.table.setIconSize(QSize(48, 44))
         self.table.verticalHeader().hide()
-        self.table.verticalHeader().setDefaultSectionSize(60)
+        self.table.verticalHeader().setDefaultSectionSize(max(60, self.table.fontMetrics().height() + 14))
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Fixed)
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.Fixed)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.table.setColumnWidth(0, 34)
         self.table.setColumnWidth(2, 108)
@@ -422,6 +433,24 @@ class MainWindow(QMainWindow):
             grid.addWidget(self.export_button, 0, 1, Qt.AlignCenter)
             grid.addWidget(self.output_right, 0, 2)
 
+    def _arrange_toolbar(self):
+        if not hasattr(self, "utility"):
+            return
+        grid = self.toolbar.layout()
+        needed = self.acquisition.sizeHint().width() + self.utility.sizeHint().width() + grid.horizontalSpacing()
+        compact = self.toolbar.width() < needed
+        if compact == self._compact_toolbar:
+            return
+        self._compact_toolbar = compact
+        grid.removeWidget(self.acquisition)
+        grid.removeWidget(self.utility)
+        if compact:
+            grid.addWidget(self.acquisition, 0, 0, 1, 2, Qt.AlignLeft)
+            grid.addWidget(self.utility, 1, 0, 1, 2, Qt.AlignRight)
+        else:
+            grid.addWidget(self.acquisition, 0, 0, Qt.AlignLeft)
+            grid.addWidget(self.utility, 0, 1, Qt.AlignRight)
+
     def _fit_to_screen(self, available=None):
         """Recover a fully usable window after a monitor or scaling change."""
         if available is None:
@@ -439,11 +468,13 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event):
         super().showEvent(event)
+        self._arrange_toolbar()
         self._arrange_output()
         QTimer.singleShot(0, self._fit_to_screen)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._arrange_toolbar()
         self._arrange_output()
 
     def _connect_controls(self):

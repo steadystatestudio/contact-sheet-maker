@@ -7,8 +7,9 @@ import os
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QFontDatabase, QPalette
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication
+from .system_fonts import apply_system_font, system_font_css
 
 
 def apply_theme(app: QApplication, preference: str = "system") -> None:
@@ -34,21 +35,7 @@ def apply_theme(app: QApplication, preference: str = "system") -> None:
     # Both indicators contrast with their surrounding surfaces and action fills.
     focus = "#f4f8ff" if dark else "#111111"
     app.setProperty("dark", dark)
-    preferred = ("Segoe UI", "Noto Sans", "DejaVu Sans", "Liberation Sans")
-    available = QFontDatabase.families()
-    if not any(name in available for name in preferred):
-        # Offscreen Qt and some bundled Linux setups do not enumerate system fonts.
-        candidates = [Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts/segoeui.ttf"] if os.name == "nt" else [
-            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
-            Path("/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf"),
-        ]
-        for path in candidates:
-            if path.exists() and QFontDatabase.addApplicationFont(str(path)) >= 0:
-                break
-        available = QFontDatabase.families()
-    font = QFont(next((name for name in preferred if name in available), app.font().family()))
-    font.setPointSizeF(10.5)
-    app.setFont(font)
+    apply_system_font(app)
     palette = QPalette()
     from PySide6.QtGui import QColor
     for role, color in [(QPalette.Window, background), (QPalette.WindowText, text),
@@ -64,7 +51,7 @@ def apply_theme(app: QApplication, preference: str = "system") -> None:
     up_arrow = (arrow_dir / ("up-dark.svg" if dark else "up-light.svg")).as_posix()
     down_arrow = (arrow_dir / ("down-dark.svg" if dark else "down-light.svg")).as_posix()
     app.setStyleSheet(f"""
-        QWidget {{ color: {text}; }}
+        QWidget {{ color: {text}; {system_font_css(app)} }}
         QMainWindow, QDialog {{ background: {background}; }}
         QPushButton {{ background: transparent; border: 1px solid {border}; border-radius: 6px;
                        padding: 9px 13px; min-height: 19px; }}
@@ -106,11 +93,11 @@ def apply_theme(app: QApplication, preference: str = "system") -> None:
         QDialog#ruleDialog QListWidget::item {{ padding: 2px 6px; }}
         QDialog#ruleDialog QLabel#sectionHeading {{ padding-top: 3px; }}
         QLabel#muted {{ color: {muted}; }}
-        QLabel#heading {{ font-size: 15pt; font-weight: 600; }}
+        QLabel#heading {{ font-weight: 600; }}
         QLabel#sectionHeading {{ font-weight: 600; padding-top: 8px; }}
         QProgressBar {{ border: none; border-radius: 6px; background: {panel};
                        text-align: center; min-height: 36px; padding: 10px 32px;
-                       font-size: 11.6pt; font-weight: 600; }}
+                       font-weight: 600; }}
         QProgressBar::chunk {{ background: {selection}; border-radius: 4px; }}
         QToolTip {{ background: {panel}; color: {text}; border: 1px solid {border}; padding: 6px; }}
     """)
