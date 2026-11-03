@@ -18,7 +18,7 @@ Issues = "https://github.com/steadystatestudio/contact-sheet-maker/issues"
 Support = "https://steady-state-studio.com/support/"
 
 [project.optional-dependencies]
-test = ["pytest>=8", "pypdf>=5"]
+test = ["pytest>=8", "pypdf>=5", "PyInstaller>=6"]
 build = ["PyInstaller>=6"]
 
 [project.gui-scripts]
