@@ -42,12 +42,12 @@ def run(app, destination: Path) -> int:
     assert len(window.model.photos) == 13 and window.export_button.isEnabled()
     assert not window.preview.pixmap.isNull()
     assert window.grab().save(str(destination / "ui.png"))
-    for theme, size, name in (("light", (853, 480), "ui-compact"),
+    for theme, size, name in (("light", (1, 1), "ui-compact"),
                               ("dark", (1280, 680), "ui-dark")):
         apply_theme(app, theme)
         window.resize(*size)
         app.processEvents(); app.processEvents()
-        assert window.width() <= size[0] and window.height() <= size[1]
+        assert window.width() >= window.minimumWidth() and window.height() >= window.minimumHeight()
         assert window.export_button.isVisible() and window.status.isVisible()
         assert window.output_controls.height() >= window.output_controls.minimumSizeHint().height()
         assert window.grab().save(str(destination / f"{name}.png"))

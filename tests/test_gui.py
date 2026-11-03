@@ -236,7 +236,8 @@ def test_small_window_controls_visible(window,app):
 
 
 @pytest.mark.parametrize("size", [(853, 480), (1280, 680)])
-def test_compact_window_keeps_export_and_status_reachable(window, app, size):
+def test_compact_window_keeps_export_and_status_reachable(window, app, size, monkeypatch):
+    _use_test_screen(window, monkeypatch, size[0], size[1])
     from PySide6.QtCore import QPoint, QRect
     window.resize(*size)
     app.processEvents(); app.processEvents()
@@ -260,7 +261,8 @@ def test_compact_window_keeps_export_and_status_reachable(window, app, size):
         assert not window.work_scroll.isAncestorOf(widget)
 
 
-def test_enlarged_text_keeps_actions_outside_scroll(window, app):
+def test_enlarged_text_keeps_actions_outside_scroll(window, app, monkeypatch):
+    _use_test_screen(window, monkeypatch, 853, 580)
     from PySide6.QtCore import QPoint, QRect
     font = window.font()
     font.setPointSizeF(font.pointSizeF() * 1.5)
@@ -274,7 +276,8 @@ def test_enlarged_text_keeps_actions_outside_scroll(window, app):
     assert window.work_scroll.verticalScrollBar().maximum() > 0
 
 
-def test_restore_large_offscreen_window_to_changed_monitor(window, app):
+def test_restore_large_offscreen_window_to_changed_monitor(window, app, monkeypatch):
+    _use_test_screen(window, monkeypatch, 853, 620)
     from PySide6.QtCore import QRect
     window.resize(1500, 1000)
     window.move(2400, 1400)
@@ -783,3 +786,13 @@ def test_import_details_include_every_failure_beyond_one_hundred(window, app, tm
     assert all(path.name in details[0] for path in paths[1:])
     assert "125 could not be loaded." in window.status.text()
     assert window.export_button.isEnabled()
+
+def _use_test_screen(window, monkeypatch, width, height):
+    """Model a monitor work area, rather than requesting an undersized window."""
+    from types import SimpleNamespace
+    from PySide6.QtCore import QRect
+    screen = window.screen()
+    replacement = SimpleNamespace(availableGeometry=lambda: QRect(0, 0, width, height),
+                                  availableGeometryChanged=screen.availableGeometryChanged)
+    monkeypatch.setattr(window, "screen", lambda: replacement)
+    window.window_size_guard.update()

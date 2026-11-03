@@ -178,6 +178,8 @@ class MainWindow(QMainWindow):
         self._restoring = True
         apply_theme(QApplication.instance(), self.settings.value("theme", "system", type=str))
         self._build_ui()
+        from .window_size import WindowSizeGuard
+        self.window_size_guard = WindowSizeGuard(self, (1000, 760), self.work_scroll)
         self._restore_settings()
         self._fit_to_screen()
         self._restoring = False
