@@ -47,6 +47,7 @@ def run(app, destination: Path) -> int:
         apply_theme(app, theme)
         window.resize(*size)
         app.processEvents(); app.processEvents()
+        drain(lambda: window.output_controls.height() >= window.output_controls.minimumSizeHint().height())
         assert window.width() >= window.minimumWidth() and window.height() >= window.minimumHeight()
         assert window.export_button.isVisible() and window.status.isVisible()
         assert window.output_controls.height() >= window.output_controls.minimumSizeHint().height()
