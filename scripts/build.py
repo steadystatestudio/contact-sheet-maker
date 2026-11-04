@@ -19,10 +19,10 @@ import sys
 import sysconfig
 from pathlib import Path
 
-from build_appearance_probe import build as build_appearance_probe, stage_probe
 
 # Support both `python scripts/build.py` and import-based build tests.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_appearance_probe import build as build_appearance_probe, stage_probe
 import fetch_appimagetool as appimage_inputs
 from fetch_release_sources import source_index
 
