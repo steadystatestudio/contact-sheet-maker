@@ -23,6 +23,7 @@ from .choice_buttons import AccentCheckBox
 from .appearance_controls import AppearanceSettingsDialog
 from .core import (Photo, SheetSettings, ExportCancelled, CaptionLayoutError,
                    collect_paths, inspect_photo, render_page, export_sheets, validate_captions)
+from .desktop_geometry import available_geometry
 from .themes import apply_theme
 from .widgets import FileProgressBar
 
@@ -469,9 +470,11 @@ class MainWindow(QMainWindow):
 
     def _fit_to_screen(self, available=None):
         """Recover a fully usable window after a monitor or scaling change."""
+        if self.isMaximized() or self.isFullScreen() or self.isMinimized():
+            return
         if available is None:
             screen = QApplication.screenAt(self.frameGeometry().center()) or self.screen()
-            available = screen.availableGeometry()
+            available = available_geometry(self, screen.availableGeometry())
         frame = self.frameGeometry()
         frame_width = max(0, frame.width() - self.width())
         frame_height = max(0, frame.height() - self.height())
@@ -782,7 +785,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(scroll)
         buttons = QDialogButtonBox(QDialogButtonBox.Close); buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)
-        area = self.screen().availableGeometry()
+        area = available_geometry(dialog, self.screen().availableGeometry())
         dialog.resize(min(900, area.width() - 60), min(900, area.height() - 60))
         dialog.exec()
 

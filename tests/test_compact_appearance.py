@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QEvent, QRect, QSettings, Qt
+from PySide6.QtCore import QEvent, QPoint, QRect, QSettings, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QCheckBox, QPushButton
 
@@ -73,3 +73,35 @@ def test_complete_export_row_stays_horizontal_at_measured_minimum(window):
     assert w.export_button.geometry().right() < w.output_right.geometry().left()
     assert w.work_scroll.verticalScrollBar().maximum() == 0
     assert w.preview.height() >= 230
+
+
+def test_short_work_area_reserves_vertical_bar_without_horizontal_form_overflow(window, monkeypatch):
+    import time
+
+    app, w = window
+    w.settings.setValue("appearance/font_mode", "custom")
+    w.settings.setValue("appearance/font_family", app.font().family())
+    w.settings.setValue("appearance/font_size_pt", 14)
+    configure_appearance(app, w.settings)
+    apply_theme(app, "system")
+    assert w.font().pointSizeF() == 14
+    screen = SimpleNamespace(availableGeometry=lambda: QRect(0, 0, 1920, 480),
+                             availableGeometryChanged=app.primaryScreen().availableGeometryChanged)
+    monkeypatch.setattr(w, "screen", lambda: screen)
+    w.window_size_guard.update()
+    w.resize(1, 1)
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        app.processEvents()
+        if (w.size() == w.minimumSize()
+                and w.work_scroll.verticalScrollBar().maximum() > 0
+                and w.work_scroll.horizontalScrollBar().maximum() == 0):
+            break
+        QTest.qWait(15)
+    assert w.work_scroll.verticalScrollBar().maximum() > 0
+    assert w.work_scroll.horizontalScrollBar().maximum() == 0, (
+        w.size().toTuple(), w.minimumSize().toTuple(),
+        w.work_scroll.viewport().size().toTuple(), w.work_scroll.widget().minimumSizeHint().toTuple())
+    assert w.font().pointSizeF() == 14
+    next_bounds = QRect(w.next_button.mapTo(w.work_scroll.viewport(), QPoint()), w.next_button.size())
+    assert w.work_scroll.viewport().rect().contains(next_bounds)
