@@ -3,7 +3,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("XDG_CACHE_HOME", "/tmp/contact-sheet-test-cache")
 import time
 from pathlib import Path
-from PySide6.QtCore import QSettings, QItemSelectionModel, Qt, QTimer
+from PySide6.QtCore import QEvent, QSettings, QItemSelectionModel, Qt, QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox, QDialog
 from PySide6.QtGui import QDesktopServices
 from PIL import Image
@@ -38,7 +38,9 @@ def window(app, tmp_path, monkeypatch):
     if w.preview_task:
         w.preview_task.cancel.set()
     wait(app, lambda: w.task is None and w.preview_task is None)
-    w.close(); app.processEvents()
+    w.close(); w.deleteLater()
+    app.sendPostedEvents(None, QEvent.DeferredDelete)
+    app.processEvents()
 
 
 def sample_paths(tmp_path, count=3):

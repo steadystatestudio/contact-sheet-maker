@@ -25,10 +25,16 @@ def test_large_system_font_survives_theme_and_compact_layout(tmp_path, monkeypat
     monkeypatch.setattr(app, "_studio_system_font_initialized", True, raising=False)
     font = QFont(old)
     font.setPointSizeF(18)
-    app.setFont(font)
+    from contact_sheet.appearance import configure_appearance
+    previous_settings = getattr(app, "_studio_pilot_settings", None)
+    settings = QSettings(str(tmp_path/"font.ini"), QSettings.IniFormat)
+    settings.setValue("appearance/font_mode", "custom")
+    settings.setValue("appearance/font_family", font.family())
+    settings.setValue("appearance/font_size_pt", 18)
+    configure_appearance(app, settings)
     window = None
     try:
-        window = MainWindow(QSettings(str(tmp_path/"font.ini"), QSettings.IniFormat))
+        window = MainWindow(settings)
         window.resize(800, 650)
         window.show()
         for theme in ("light", "dark", "system"):
@@ -51,6 +57,7 @@ def test_large_system_font_survives_theme_and_compact_layout(tmp_path, monkeypat
     finally:
         if window:
             window.close()
+        configure_appearance(app, previous_settings)
         app.setFont(old)
         app.setPalette(old_palette)
         app.setStyleSheet(old_style)

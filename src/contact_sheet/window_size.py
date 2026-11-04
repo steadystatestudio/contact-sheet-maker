@@ -10,11 +10,12 @@ class WindowSizeGuard(QObject):
     for display scaling, so devicePixelRatio must not be applied again.
     """
 
-    def __init__(self, window, baseline, scroll=None):
+    def __init__(self, window, baseline, scroll=None, preferred_row_width=None):
         super().__init__(window)
         self.window = window
         self.baseline = QSize(*baseline)
         self.scroll = scroll
+        self.preferred_row_width = preferred_row_width
         self._screen = None
         self._handle = None
         self._busy = False
@@ -29,6 +30,8 @@ class WindowSizeGuard(QObject):
             QEvent.Show, QEvent.Resize, QEvent.FontChange,
             QEvent.ApplicationFontChange, QEvent.StyleChange,
         }:
+            if event.type() in {QEvent.FontChange, QEvent.ApplicationFontChange, QEvent.StyleChange}:
+                self.update()
             self.timer.start(0)
         return False
 
@@ -53,8 +56,11 @@ class WindowSizeGuard(QObject):
             extra_w = max(0, frame.width() - window.width())
             extra_h = max(0, frame.height() - window.height())
             cap = QSize(max(1, area.width() - extra_w), max(1, area.height() - extra_h))
-            scale = max(1.0, window.fontMetrics().height() / 16.0)
-            wanted = QSize(round(self.baseline.width() * scale), round(self.baseline.height() * scale))
+            # The workspace floor is logical geometry, not a font multiplier.
+            # Styled controls supply their own measured requirements below.
+            wanted = QSize(self.baseline)
+            if self.preferred_row_width:
+                wanted.setWidth(max(wanted.width(), self.preferred_row_width()))
             central = window.centralWidget()
             layout = central.layout()
             layout.activate()
@@ -63,7 +69,8 @@ class WindowSizeGuard(QObject):
                 work = self.scroll.widget()
                 margins = layout.contentsMargins()
                 outer_width = margins.left() + margins.right()
-                wanted.setWidth(max(wanted.width(), work.minimumSizeHint().width() + outer_width))
+                work_width = work.minimumSizeHint().width() + outer_width + 2 * self.scroll.frameWidth()
+                wanted.setWidth(max(wanted.width(), work_width))
                 width = min(wanted.width(), cap.width())
                 content_width = max(1, width - outer_width - 2 * self.scroll.frameWidth())
                 work_layout = work.layout()
@@ -79,7 +86,7 @@ class WindowSizeGuard(QObject):
                     if item.widget() is self.scroll:
                         heights.append(work_height + 2 * self.scroll.frameWidth())
                     else:
-                        heights.append(max(item.minimumSize().height(),
+                        heights.append(max(item.minimumSize().height(), item.sizeHint().height(),
                                            item.heightForWidth(content_width) if item.hasHeightForWidth() else 0))
                 complete_height = (sum(heights) + max(0, len(heights) - 1) * layout.spacing()
                                    + margins.top() + margins.bottom())

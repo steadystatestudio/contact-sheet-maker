@@ -60,8 +60,11 @@ def test_qa_launch_injects_preferences_and_runs_normal_event_loop(tmp_path, monk
     calls = []
 
     class Application:
+        @staticmethod
+        def setAttribute(attribute, enabled):
+            calls.append(("native dialogs", attribute, enabled))
         def __init__(self, args):
-            pass
+            calls.append("application")
         def setApplicationName(self, value):
             pass
         def setOrganizationName(self, value):
@@ -87,4 +90,5 @@ def test_qa_launch_injects_preferences_and_runs_normal_event_loop(tmp_path, monk
     target = tmp_path / "interactive"
     monkeypatch.setattr(startup.sys, "argv", ["contact-sheet", "--qa-ui", str(target)])
     assert startup.main() == 0
-    assert calls == [target / "settings.ini", "show", "event loop"]
+    assert calls == [("native dialogs", startup.Qt.ApplicationAttribute.AA_DontUseNativeDialogs, True),
+                     "application", target / "settings.ini", "show", "event loop"]

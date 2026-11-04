@@ -2,9 +2,9 @@
 
 A free, offline Steady State Studio desktop utility for turning local JPEG and PNG photos into printable contact sheets.
 
-Every feature is free. No account, uploads, watermarks, or feature gates. Get the [version 1.1.0 downloads](https://github.com/steadystatestudio/contact-sheet-maker/releases/tag/v1.1.0). The release validation receipt identifies the exact source, native checks and package hashes.
+Every feature is free. No account, uploads, watermarks, or feature gates. Get the [version 1.2.0 downloads](https://github.com/steadystatestudio/contact-sheet-maker/releases/tag/v1.2.0). The release validation receipt identifies the exact source, native checks and package hashes.
 
-The interface follows your operating system's font family, size and text scaling. Reopen the app after changing desktop font settings. Exported sheet typography is controlled separately by the sheet layout.
+The interface resolves your desktop font, size, theme and accent independently. Settings includes optional font/accent overrides, Refresh and Reset; automatic Linux matching requires no system Python or PyGObject. Exported sheet typography is controlled separately by the sheet layout.
 
 [App details](https://steady-state-studio.com/apps/contact-sheet-maker/) · [Worked guide: printable photo contact sheets](https://steady-state-studio.com/guides/create-printable-photo-contact-sheet/) · [Studio website](https://steady-state-studio.com/) · [Versioned downloads](https://github.com/steadystatestudio/contact-sheet-maker/releases) · [Report a problem](https://github.com/steadystatestudio/contact-sheet-maker/issues) · [Donate on Ko-fi](https://ko-fi.com/steadystatestudio)
 

@@ -12,13 +12,15 @@ from typing import Callable
 from PySide6.QtCore import QAbstractTableModel, QItemSelectionModel, QModelIndex, QRectF, QSettings, QSize, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
-    QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
-    QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox, QProgressBar,
-    QPushButton, QScrollArea, QSizePolicy, QSpinBox, QSplitter, QTableView, QVBoxLayout, QWidget,
+    QAbstractItemView, QApplication, QComboBox, QDialog, QDialogButtonBox,
+    QDoubleSpinBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
+    QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QSplitter, QTableView, QVBoxLayout, QWidget,
 )
 
 from . import __version__
+from .appearance import configure_appearance
+from .choice_buttons import AccentCheckBox
+from .appearance_controls import AppearanceSettingsDialog
 from .core import (Photo, SheetSettings, ExportCancelled, CaptionLayoutError,
                    collect_paths, inspect_photo, render_page, export_sheets, validate_captions)
 from .themes import apply_theme
@@ -136,30 +138,34 @@ class PagePreview(QWidget):
         painter.drawPixmap(x, y, size.width(), size.height(), self.pixmap)
 
 
-class SettingsDialog(QDialog):
-    def __init__(self, current, parent=None):
-        super().__init__(parent)
+class SettingsDialog(AppearanceSettingsDialog):
+    def __init__(self, settings, parent=None):
+        if isinstance(settings, str):
+            # Retain the old source-level constructor without mutating its preferences.
+            settings_object = QSettings()
+        else:
+            settings_object = settings
+        super().__init__(settings_object, parent,
+                         apply_callback=lambda: apply_theme(QApplication.instance(),
+                             settings_object.value("theme", "system", type=str)))
         self.setWindowTitle("Contact Sheet Maker · Settings")
-        layout = QVBoxLayout(self)
-        form = QFormLayout()
-        self.theme = QComboBox()
-        self.theme.addItems(["System", "Light", "Dark"])
-        self.theme.setCurrentText(current.title())
-        form.addRow("Appearance", self.theme)
-        layout.addLayout(form)
-        note = QLabel("Layout and export choices are saved on this computer.\nPhotos are never uploaded, copied into a library, or altered.")
+        self.theme = self.controls.theme
+        if isinstance(settings, str):
+            self.theme.setCurrentIndex(max(0, self.theme.findData(settings.lower())))
+        note = QLabel("Layout and export choices are saved on this computer. Photos stay unchanged.")
         note.setWordWrap(True)
-        note.setObjectName("muted")
-        layout.addWidget(note)
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        self.content_layout.addWidget(note)
 
 
 class MainWindow(QMainWindow):
     def __init__(self, settings: QSettings | None = None):
         super().__init__()
+        self._splitter_fit_timer = QTimer(self)
+        self._splitter_fit_timer.setSingleShot(True)
+        self._splitter_fit_timer.timeout.connect(self._fit_splitter_contents)
+        self._screen_fit_timer = QTimer(self)
+        self._screen_fit_timer.setSingleShot(True)
+        self._screen_fit_timer.timeout.connect(self._fit_to_screen)
         self.settings = settings or QSettings("Steady State Studio", "Contact Sheet Maker")
         self.setWindowTitle("Contact Sheet Maker · Steady State Studio")
         self.setWindowIcon(QIcon(str(Path(__file__).parent / "assets/icon.svg")))
@@ -176,11 +182,13 @@ class MainWindow(QMainWindow):
         self.closing = False
         self.last_outputs = []
         self._restoring = True
+        configure_appearance(QApplication.instance(), self.settings)
         apply_theme(QApplication.instance(), self.settings.value("theme", "system", type=str))
         self._build_ui()
         from .window_size import WindowSizeGuard
-        self.window_size_guard = WindowSizeGuard(self, (1000, 760), self.work_scroll)
+        self.window_size_guard = WindowSizeGuard(self, (800, 620), self.work_scroll, self._preferred_row_width)
         self._restore_settings()
+        self.window_size_guard.update()
         self._fit_to_screen()
         self._restoring = False
         self.debounce = QTimer(self)
@@ -335,7 +343,7 @@ class MainWindow(QMainWindow):
         self.columns = QSpinBox(); self.columns.setRange(1, 12); self.columns.setValue(3)
         self.margin = QDoubleSpinBox(); self.margin.setRange(0, 50); self.margin.setValue(10); self.margin.setSuffix(" mm"); self.margin.setDecimals(1)
         self.gap = QDoubleSpinBox(); self.gap.setRange(0, 30); self.gap.setValue(4); self.gap.setSuffix(" mm"); self.gap.setDecimals(1)
-        self.captions = QCheckBox("Filename captions"); self.captions.setChecked(True)
+        self.captions = AccentCheckBox("Filename captions"); self.captions.setChecked(True)
         self.title_input = QLineEdit(); self.title_input.setPlaceholderText("Optional sheet title"); self.title_input.setMaxLength(200)
         self.title_input.setAccessibleName("Sheet title")
         def field(label, widget, row, column):
@@ -376,7 +384,6 @@ class MainWindow(QMainWindow):
         out.setColumnStretch(0, 1); out.setColumnStretch(2, 1)
         self.export_button = self._button("Export Sheets…", self._choose_export, "Choose a destination and export every page")
         self.export_button.setObjectName("primary")
-        self.export_button.setMinimumWidth(190)
         out.addWidget(self.export_button, 0, 1, Qt.AlignCenter)
         outer.addWidget(self.output_controls)
         self.export_reason = QLabel()
@@ -413,6 +420,12 @@ class MainWindow(QMainWindow):
 
     def sheet_settings(self):
         return SheetSettings(page_size=self.page_size.currentText(), orientation=self.orientation.currentText(), rows=self.rows.value(), columns=self.columns.value(), margin_mm=self.margin.value(), gap_mm=self.gap.value(), captions=self.captions.isChecked(), title=self.title_input.text(), dpi=int(self.dpi_combo.currentText().split()[0]))
+
+    def _preferred_row_width(self):
+        toolbar = self.acquisition.sizeHint().width() + self.utility.sizeHint().width() + 8
+        output = (self.output_left.sizeHint().width() + self.output_right.sizeHint().width()
+                  + self.export_button.sizeHint().width() + 2 * self.output_controls.layout().horizontalSpacing())
+        return max(toolbar, output) + 32
 
     def _arrange_output(self):
         """Keep export reachable while narrow work areas scroll independently."""
@@ -473,15 +486,15 @@ class MainWindow(QMainWindow):
         super().showEvent(event)
         self._arrange_toolbar()
         self._arrange_output()
-        QTimer.singleShot(0, self._fit_to_screen)
-        QTimer.singleShot(0, self._fit_splitter_contents)
+        self._screen_fit_timer.start(0)
+        self._splitter_fit_timer.start(0)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._arrange_toolbar()
         self._arrange_output()
         if hasattr(self, "splitter"):
-            QTimer.singleShot(0, self._fit_splitter_contents)
+            self._splitter_fit_timer.start(0)
 
     def _fit_splitter_contents(self):
         """A horizontal splitter must reserve the height of wrapped notes too."""
@@ -959,11 +972,11 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Support Steady State Studio", f"Could not open your browser. Visit Ko-fi:\n{DONATE_URL}\n\nEvery feature is free; donations are optional.")
 
     def _settings_dialog(self):
-        dialog = SettingsDialog(self.settings.value("theme", "system", type=str), self)
+        dialog = SettingsDialog(self.settings, self)
         if dialog.exec() == QDialog.Accepted:
-            preference = dialog.theme.currentText().lower()
-            self.settings.setValue("theme", preference)
-            apply_theme(QApplication.instance(), preference)
+            dialog.controls.save_settings()
+            configure_appearance(QApplication.instance(), self.settings)
+            apply_theme(QApplication.instance(), self.settings.value("theme", "system", type=str))
             self.preview.update()
 
     def _system_theme_changed(self, *_):

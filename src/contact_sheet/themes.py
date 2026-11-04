@@ -9,7 +9,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication
-from .system_fonts import apply_system_font, system_font_css, accent_colors, accent_text, bind_appearance_refresh
+from .system_fonts import apply_system_font, system_font_css, accent_colors, bind_appearance_refresh
 
 
 def apply_theme(app: QApplication, preference: str = "system") -> None:
@@ -17,7 +17,10 @@ def apply_theme(app: QApplication, preference: str = "system") -> None:
     colors = accent_colors(app)
     accent, on_accent = colors["accent"], colors["on_accent"]
     hover, pressed = colors["hover"], colors["pressed"]
-    dark = app.styleHints().colorScheme() == Qt.ColorScheme.Dark
+    from .appearance import resolved_color_scheme
+    resolved = resolved_color_scheme(app)
+    dark = (resolved == "dark" if resolved in {"dark", "light"}
+            else app.styleHints().colorScheme() == Qt.ColorScheme.Dark)
     if preference == "system" and os.name == "nt":
         try:
             import winreg

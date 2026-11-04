@@ -1,5 +1,13 @@
 # Changes
 
+## 1.2.0 — 2026-11-04
+
+- Follow Linux desktop font, size, light/dark and accent preferences with independent providers and readable fallbacks; appearance detection needs no system Python or PyGObject.
+- Add saved app-wide appearance controls, Refresh and appearance-only Reset, with fitted settings dialogs.
+- Measure compact window minimums from current controls instead of multiplying a fixed workspace by font size. Preserve useful previews and use scrolling only on constrained screens.
+- Style checkbox choices as accent buttons while retaining checkbox state and keyboard behavior. Existing photo processing and output formats are unchanged.
+
+
 ## 1.1.0 — 2026-11-03
 
 All interface text follows the configured desktop UI size, including headings, Help, tables and status. Document pages, exported captions and watermarks retain their own content typography.

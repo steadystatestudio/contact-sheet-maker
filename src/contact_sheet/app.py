@@ -2,7 +2,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import sys
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import QApplication
 from . import __version__
 from .gui import MainWindow
@@ -28,6 +28,7 @@ def _qa_settings(argument: str) -> QSettings:
 
 
 def main() -> int:
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeDialogs, True)
     app = QApplication(sys.argv)
     from .system_fonts import capture_system_appearance
     capture_system_appearance(app)

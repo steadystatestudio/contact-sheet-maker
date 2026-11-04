@@ -37,6 +37,8 @@ def test_failed_host_query_preserves_captured_native_accent(monkeypatch):
     native.setColor(QPalette.Accent, QColor("#d9469a"))
     monkeypatch.setattr(app, "_studio_native_palette", native, raising=False)
     monkeypatch.setattr(app, "_studio_host_appearance", {"fallback_reason": "OSError"}, raising=False)
+    monkeypatch.setattr(app, "_studio_pilot_configured", False, raising=False)
+    monkeypatch.setattr(appearance, "capture_system_appearance", lambda _: {"fallback_reason": "OSError"})
     before = QPalette(app.palette())
     try:
         replacement = QPalette()
@@ -65,20 +67,14 @@ def test_app_html_keeps_heading_and_small_text_at_system_size():
         block = block.next()
 
 
-@pytest.mark.parametrize(
-    "failure", [FileNotFoundError(), OSError("host library unavailable"), ValueError("invalid preferences")]
-)
-def test_host_query_failure_retains_a_diagnostic(monkeypatch, failure):
+def test_linux_capture_does_not_invoke_system_python(monkeypatch):
     monkeypatch.setattr(appearance.sys, "platform", "linux")
-    monkeypatch.setattr(appearance, "_desktop_schema", lambda: "org.cinnamon.desktop.interface")
-
     def fail(*args, **kwargs):
-        raise failure
-
+        raise AssertionError("capturing Qt fallback must not start a host program")
     monkeypatch.setattr(appearance, "_run_host", fail)
     result = appearance._host_appearance()
-    assert result["source"] == "native Qt fallback"
-    assert result["fallback_reason"] == type(failure).__name__
+    assert result["source"] == "captured Qt fallback"
+    assert result["fallback_reason"]
 
 
 def test_plain_filename_and_document_content_typography_are_preserved():
