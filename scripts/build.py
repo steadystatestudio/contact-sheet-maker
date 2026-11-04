@@ -19,6 +19,8 @@ import sys
 import sysconfig
 from pathlib import Path
 
+from build_appearance_probe import build as build_appearance_probe, stage_probe
+
 # Support both `python scripts/build.py` and import-based build tests.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fetch_appimagetool as appimage_inputs
@@ -210,7 +212,7 @@ def copy_notices(root: Path, bundle: Path, target_platform: str) -> None:
     (bundle / "LICENSE-INDEX.json").write_text(json.dumps(license_index, indent=2) + "\n", encoding="utf-8")
     native_libraries = {}
     for path in sorted((bundle / "_internal").rglob("*")):
-        if path.is_file() and (path.suffix.lower() in {".dll", ".pyd", ".dylib"} or ".so" in path.name):
+        if path.is_file() and (path.suffix.lower() in {".dll", ".pyd", ".dylib"} or ".so" in path.name or path.name == "appearance-probe"):
             with path.open("rb") as stream:
                 native_libraries[path.relative_to(bundle).as_posix()] = hashlib.file_digest(stream, "sha256").hexdigest()
     (bundle / "NATIVE-LIBRARIES.json").write_text(json.dumps(native_libraries, indent=2) + "\n", encoding="utf-8")
@@ -280,12 +282,14 @@ def main(argv: list[str] | None = None) -> int:
                  dist / f"{NAME}-linux-x86_64.tar.gz", dist / f"{NAME}-x86_64.AppImage"):
         confined_output(root, path)
     build.mkdir(exist_ok=True)
+    build_appearance_probe()
     dist.mkdir(exist_ok=True)
     os.environ["PYINSTALLER_CONFIG_DIR"] = str(build / "pyinstaller-cache")
     icon_png(root, build / "icon.png")
     subprocess.run(pyinstaller_command(root, sys.platform), cwd=root, check=True, timeout=1200,
                    env=pyinstaller_environment(sys.platform))
     bundle = dist / NAME
+    stage_probe(bundle, "contact_sheet")
     verify_qt_subset(bundle)
     copy_notices(root, bundle, sys.platform)
     artifacts = [make_archive(root, sys.platform)]
