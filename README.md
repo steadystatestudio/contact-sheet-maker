@@ -2,7 +2,7 @@
 
 A free, offline Steady State Studio desktop utility for turning local JPEG and PNG photos into printable contact sheets.
 
-Every feature is free. No account, uploads, watermarks, or feature gates. Get the [version 1.0.5 downloads](https://github.com/steadystatestudio/contact-sheet-maker/releases/tag/v1.0.5). The release validation receipt identifies the exact source, native checks and package hashes.
+Every feature is free. No account, uploads, watermarks, or feature gates. Get the [version 1.1.0 downloads](https://github.com/steadystatestudio/contact-sheet-maker/releases/tag/v1.1.0). The release validation receipt identifies the exact source, native checks and package hashes.
 
 The interface follows your operating system's font family, size and text scaling. Reopen the app after changing desktop font settings. Exported sheet typography is controlled separately by the sheet layout.
 
@@ -105,3 +105,5 @@ For a native folder/archive build without AppImage tooling, use `python scripts/
 - Optional support payment and receipt delivery have not been tested. Every feature remains available without payment.
 
 MIT license, copyright © 2026 Steady State Studio. The actual File Renamer theme/status component was adapted under its MIT license; exact provenance and dependency notices are in `THIRD_PARTY_NOTICES.md`. Every feature remains free, with optional support never required to finish a job.
+
+See [Desktop appearance](docs/APPEARANCE.md) for system fonts, accents, scaling and restart behavior.

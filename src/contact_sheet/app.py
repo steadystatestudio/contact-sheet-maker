@@ -29,6 +29,8 @@ def _qa_settings(argument: str) -> QSettings:
 
 def main() -> int:
     app = QApplication(sys.argv)
+    from .system_fonts import capture_system_appearance
+    capture_system_appearance(app)
     app.setApplicationName("Contact Sheet Maker")
     app.setOrganizationName("Steady State Studio")
     app.setApplicationVersion(__version__)

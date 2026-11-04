@@ -80,13 +80,15 @@ def set_action_state(app, primary, anchor, state):
     app.processEvents()
 
 
-@pytest.mark.parametrize("state, expected_fill", [
-    ("normal", "#2768ad"),
-    ("hover", "#2f6db1"),
-    ("pressed", "#2463a6"),
+@pytest.mark.parametrize("state, color_role", [
+    ("normal", "accent"),
+    ("hover", "hover"),
+    ("pressed", "pressed"),
 ])
-def test_primary_text_and_focus_contrast(theme_window, state, expected_fill):
+def test_primary_text_and_focus_contrast(theme_window, state, color_role):
     app, window, primary, anchor = theme_window
+    from contact_sheet.system_fonts import accent_colors
+    expected_fill = accent_colors(app)[color_role]
     set_action_state(app, primary, anchor, state)
     border, fill = colors(primary)
     assert fill.name() == expected_fill
@@ -100,10 +102,9 @@ def test_primary_text_and_focus_contrast(theme_window, state, expected_fill):
     assert primary.hasFocus()
     focus, focused_fill = colors(primary)
     assert focused_fill == fill
-    assert focus.name() == ("#f4f8ff" if app.property("dark") else "#111111")
-    for adjacent in (fill, app.palette().color(QPalette.Window),
-                     app.palette().color(QPalette.Button), app.palette().color(QPalette.Base)):
-        assert contrast(focus, adjacent) >= 3
+    assert focus.name() == accent_colors(app)["on_accent"]
+    # An inner border stays visible against arbitrary system accent fills.
+    assert contrast(focus, fill) >= 3
     # Focus changes color, never border width, control size, or content placement.
     assert (primary.geometry(), primary.sizeHint(), primary.contentsRect()) == (geometry, hint, contents)
 

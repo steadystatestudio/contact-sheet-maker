@@ -42,6 +42,8 @@ def run(app, destination: Path) -> int:
     assert len(window.model.photos) == 13 and window.export_button.isEnabled()
     assert not window.preview.pixmap.isNull()
     assert window.grab().save(str(destination / "ui.png"))
+    from .appearance_qa import capture_appearance
+    capture_appearance(app, window, destination)
     for theme, size, name in (("light", (1, 1), "ui-compact"),
                               ("dark", (1280, 680), "ui-dark")):
         apply_theme(app, theme)

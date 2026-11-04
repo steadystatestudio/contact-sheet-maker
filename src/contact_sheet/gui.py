@@ -391,7 +391,7 @@ class MainWindow(QMainWindow):
         self.status = FileProgressBar()
         self.status.setAccessibleName("Contact sheet status and progress")
         self.status.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
-        self.status.setMinimumHeight(42)
+        self.status.setMinimumHeight(self.status.fontMetrics().height() + 14)
         self.status.preview(0, "Add photos to get started.")
         self.progress = self.status
         self.cancel_button = self._button("Cancel", self.cancel_operation)
@@ -421,7 +421,7 @@ class MainWindow(QMainWindow):
         grid = self.output_controls.layout()
         needed = (self.output_left.sizeHint().width() + self.output_right.sizeHint().width()
                   + self.export_button.sizeHint().width() + 2 * grid.horizontalSpacing())
-        compact = self.output_controls.width() < max(860, needed)
+        compact = self.output_controls.width() < needed
         if compact == self._compact_output:
             return
         self._compact_output = compact

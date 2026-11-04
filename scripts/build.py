@@ -166,6 +166,9 @@ def copy_notices(root: Path, bundle: Path, target_platform: str) -> None:
     shutil.copy2(root / "packaging/LIBRARY-REPLACEMENT.txt", bundle / "LIBRARY-REPLACEMENT.txt")
     for name in ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "requirements-build-lock.txt"):
         shutil.copy2(root / name, bundle / name)
+    if (root / "docs/APPEARANCE.md").is_file():
+        (bundle / "docs").mkdir(exist_ok=True)
+        shutil.copy2(root / "docs/APPEARANCE.md", bundle / "docs/APPEARANCE.md")
     if (root / "docs/VALIDATION.md").is_file():
         shutil.copy2(root / "docs/VALIDATION.md", bundle / "VALIDATION.md")
     licenses = bundle / "licenses"

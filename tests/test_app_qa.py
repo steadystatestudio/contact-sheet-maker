@@ -81,6 +81,8 @@ def test_qa_launch_injects_preferences_and_runs_normal_event_loop(tmp_path, monk
             calls.append("show")
 
     monkeypatch.setattr(startup, "QApplication", Application)
+    from contact_sheet import system_fonts
+    monkeypatch.setattr(system_fonts, "capture_system_appearance", lambda app: {})
     monkeypatch.setattr(startup, "MainWindow", Window)
     target = tmp_path / "interactive"
     monkeypatch.setattr(startup.sys, "argv", ["contact-sheet", "--qa-ui", str(target)])
