@@ -15,6 +15,15 @@ def _prepare_window(window):
         window._arrange_output()
         window._fit_splitter_contents()
     prepare_window_for_show(window, arrange)
+    # Fit the fresh default to the measured useful workspace before mapping.
+    # Restored user geometry retains its existing monitor-fitting behavior.
+    if not window._geometry_restored:
+        guard = window.window_size_guard
+        height = max(window.minimumHeight(), min(
+            guard.preferredMinimum.height(), guard.geometry_constraint["client_capacity"][1]))
+        if window.height() > height:
+            window.resize(window.width(), height)
+            prepare_window_for_show(window, arrange)
 
 
 def _qa_settings(argument: str) -> QSettings:

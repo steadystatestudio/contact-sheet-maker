@@ -521,6 +521,7 @@ class MainWindow(QMainWindow):
         self.stem_input.editingFinished.connect(self._save_settings)
 
     def _restore_settings(self):
+        self._geometry_restored = False
         try:
             saved = json.loads(self.settings.value("layout", "{}", type=str))
             if not isinstance(saved, dict):
@@ -537,7 +538,7 @@ class MainWindow(QMainWindow):
             self.preset.setCurrentIndex(3 if saved else 0)
             geometry = self.settings.value("geometry")
             if geometry:
-                self.restoreGeometry(geometry)
+                self._geometry_restored = bool(self.restoreGeometry(geometry))
                 if not any(screen.availableGeometry().intersects(self.frameGeometry()) for screen in QApplication.screens()):
                     self.move(self.screen().availableGeometry().topLeft())
             splitter = self.settings.value("splitter")

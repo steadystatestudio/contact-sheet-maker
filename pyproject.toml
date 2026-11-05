@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "steady-contact-sheet"
-version = "1.2.9"
+version = "1.2.10"
 description = "Free, offline contact sheets from Steady State Studio"
 requires-python = ">=3.12"
 license = "MIT"
