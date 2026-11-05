@@ -12,6 +12,17 @@ from .themes import apply_theme
 from .appearance import prepare_initial_appearance
 
 
+def _register_offscreen_test_fonts(app):
+    """Read installed Windows fonts only for the explicit offscreen QA mode."""
+    if sys.platform == "win32" and app.platformName() == "offscreen":
+        import os
+        from PySide6.QtGui import QFontDatabase
+        for name in ("segoeui.ttf", "seguisb.ttf"):
+            path = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / name
+            if path.is_file():
+                QFontDatabase.addApplicationFont(str(path))
+
+
 def run(app, destination: Path) -> int:
     destination.mkdir(parents=True, exist_ok=False)
     inputs = destination / "inputs"; inputs.mkdir(exist_ok=True)
@@ -25,6 +36,7 @@ def run(app, destination: Path) -> int:
             source.save(path, icc_profile=srgb)
         paths.append(path)
     before = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
+    _register_offscreen_test_fonts(app)
     settings = QSettings(str(destination / "smoke-settings.ini"), QSettings.IniFormat)
     prepare_initial_appearance(app, settings, theme_key="theme")
     window = MainWindow(settings)
