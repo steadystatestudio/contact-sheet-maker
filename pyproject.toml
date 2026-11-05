@@ -9,7 +9,7 @@ description = "Free, offline contact sheets from Steady State Studio"
 requires-python = ">=3.12"
 license = "MIT"
 authors = [{name = "Steady State Studio"}]
-dependencies = ["PySide6==6.12.0", "Pillow>=11,<13", "reportlab>=4.4,<6"]
+dependencies = ["PySide6==6.12.0", "Pillow>=13.0.0,<14", "reportlab>=4.4,<6"]
 
 [project.urls]
 Homepage = "https://steady-state-studio.com/apps/contact-sheet-maker/"
