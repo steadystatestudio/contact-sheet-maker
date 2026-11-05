@@ -6,7 +6,7 @@ os.environ.setdefault("XDG_CACHE_HOME", "/tmp/contact-sheet-test-cache")
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QDoubleSpinBox, QLineEdit,
@@ -135,7 +135,15 @@ def test_secondary_pressed_action_keeps_visible_focus(theme_window):
     app, window, primary, anchor = theme_window
     anchor.setFocus(Qt.TabFocusReason)
     anchor.setDown(True)
+    # A color oracle needs opaque glyph pixels independent of host antialiasing.
+    before_font = (anchor.font().family(), anchor.font().pointSizeF(), anchor.fontInfo().pixelSize(),
+                   anchor.fontMetrics().height(), anchor.fontMetrics().horizontalAdvance(anchor.text()))
+    glyph_font = QFont(anchor.font())
+    glyph_font.setStyleStrategy(glyph_font.styleStrategy() | QFont.StyleStrategy.NoAntialias)
+    anchor.setFont(glyph_font)
     app.processEvents()
+    assert before_font == (anchor.font().family(), anchor.font().pointSizeF(), anchor.fontInfo().pixelSize(),
+                           anchor.fontMetrics().height(), anchor.fontMetrics().horizontalAdvance(anchor.text()))
     focus, fill = colors(anchor)
     assert contrast(focus, fill) >= 3
     # Qt's palette reports the normal text role even when a :pressed stylesheet

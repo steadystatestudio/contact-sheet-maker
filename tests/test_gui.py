@@ -33,6 +33,8 @@ def window(app, tmp_path, monkeypatch):
     w = MainWindow(QSettings(str(tmp_path / "settings.ini"), QSettings.IniFormat))
     w.show(); app.processEvents()
     yield w
+    w.closing = True
+    w.debounce.stop()
     if w.task:
         w.task.cancel.set()
     if w.preview_task:

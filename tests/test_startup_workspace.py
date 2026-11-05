@@ -1,5 +1,9 @@
 """Fresh startup fits the measured workspace and preserves restored geometry."""
 from types import SimpleNamespace
+from pathlib import Path
+import os
+import subprocess
+import sys
 
 import pytest
 from PySide6.QtCore import (
@@ -64,7 +68,7 @@ def startup(tmp_path, monkeypatch):
         app.setFont(original_font)
 
 
-def test_fresh_default_reserves_the_decorated_normal_workspace(startup):
+def _assert_fresh_default_reserves_the_decorated_normal_workspace(startup):
     window = startup.create()
     width = window.width()
     font = window.font()
@@ -84,7 +88,7 @@ def test_fresh_default_reserves_the_decorated_normal_workspace(startup):
     assert not window.isVisible()
 
 
-def test_saved_usable_geometry_is_preserved_instead_of_refitted_to_default(startup):
+def _assert_saved_usable_geometry_is_preserved_instead_of_refitted_to_default(startup):
     seed = QMainWindow()
     try:
         seed.resize(1080, 700)
@@ -108,8 +112,7 @@ def test_saved_usable_geometry_is_preserved_instead_of_refitted_to_default(start
     assert not window.isVisible()
 
 
-@pytest.mark.parametrize("invalid_geometry", [QByteArray(b"not-geometry"), "not-geometry"])
-def test_malformed_saved_geometry_uses_the_fitted_default(startup, invalid_geometry):
+def _assert_malformed_saved_geometry_uses_the_fitted_default(startup, invalid_geometry):
     startup.settings.setValue("geometry", invalid_geometry)
     window = startup.create()
     width = window.width()
@@ -121,3 +124,49 @@ def test_malformed_saved_geometry_uses_the_fitted_default(startup, invalid_geome
     assert window.preview.minimumHeight() >= 230
     assert startup.settings.value("geometry") == invalid_geometry
     assert not window.isVisible()
+
+
+def _invalid_geometry(kind):
+    return QByteArray(b"not-geometry") if kind == "bytes" else "not-geometry"
+
+
+def _isolated_startup_case(check, directory, invalid_kind=""):
+    # A fresh application has no inherited controller or stylesheet from earlier
+    # source tests. Keep every geometry/font assertion inside that actual process.
+    script = """
+import contextlib,runpy,sys
+from pathlib import Path
+import pytest
+namespace=runpy.run_path(sys.argv[1])
+with pytest.MonkeyPatch.context() as patches:
+    fixture=namespace["startup"].__wrapped__(Path(sys.argv[3]),patches)
+    startup=next(fixture)
+    try:
+        if sys.argv[4]:
+            invalid=namespace["_invalid_geometry"](sys.argv[4])
+            namespace[sys.argv[2]](startup,invalid)
+        else:
+            namespace[sys.argv[2]](startup)
+    finally:
+        with contextlib.suppress(StopIteration):
+            next(fixture)
+"""
+    source = str(Path(entry.__file__).parents[1])
+    environment = dict(os.environ, PYTHONPATH=source + os.pathsep + os.environ.get("PYTHONPATH", ""))
+    result = subprocess.run([sys.executable, "-X", "utf8", "-c", script, str(Path(__file__).resolve()),
+                             check, str(directory), invalid_kind], env=environment, text=True,
+                            capture_output=True, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_fresh_default_reserves_the_decorated_normal_workspace(tmp_path):
+    _isolated_startup_case("_assert_fresh_default_reserves_the_decorated_normal_workspace", tmp_path)
+
+
+def test_saved_usable_geometry_is_preserved_instead_of_refitted_to_default(tmp_path):
+    _isolated_startup_case("_assert_saved_usable_geometry_is_preserved_instead_of_refitted_to_default", tmp_path)
+
+
+@pytest.mark.parametrize("invalid_kind", ["bytes", "text"])
+def test_malformed_saved_geometry_uses_the_fitted_default(tmp_path, invalid_kind):
+    _isolated_startup_case("_assert_malformed_saved_geometry_uses_the_fitted_default", tmp_path, invalid_kind)
