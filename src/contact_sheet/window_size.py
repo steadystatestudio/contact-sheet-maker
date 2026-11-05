@@ -3,6 +3,7 @@ from PySide6.QtCore import QEvent, QObject, QPoint, QSize, QTimer
 from PySide6.QtGui import QGuiApplication
 
 from .desktop_geometry import available_geometry, workarea_provider
+from .window_screen import observe_window_screen
 
 
 class WindowSizeGuard(QObject):
@@ -60,10 +61,8 @@ class WindowSizeGuard(QObject):
         self._busy = True
         try:
             window = self.window
-            handle = window.windowHandle()
-            if handle is not None and handle is not self._handle:
-                handle.screenChanged.connect(self._screen_changed)
-                self._handle = handle
+            handle = observe_window_screen(window, self._screen_changed, owner=self)
+            self._handle = handle
             screen = window.screen()
             if screen is not self._screen:
                 if self._screen is not None:

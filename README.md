@@ -2,7 +2,7 @@
 
 A free, offline Steady State Studio desktop utility for turning local JPEG and PNG photos into printable contact sheets.
 
-Every feature is free. No account, uploads, watermarks, or feature gates. Get the [version 1.2.0 downloads](https://github.com/steadystatestudio/contact-sheet-maker/releases/tag/v1.2.0). The release validation receipt identifies the exact source, native checks and package hashes.
+Every feature is free. No account, uploads, watermarks, or feature gates. Get the [versioned downloads](https://github.com/steadystatestudio/contact-sheet-maker/releases). The release validation receipt identifies the exact source, native checks and package hashes.
 
 The interface resolves your desktop font, size, theme and accent independently. Settings includes optional font/accent overrides, Refresh and Reset; automatic Linux matching requires no system Python or PyGObject. Exported sheet typography is controlled separately by the sheet layout.
 
@@ -91,7 +91,7 @@ Download published packages from the repository's versioned Releases. A separate
 
 Packages include `BUILD-INFO.json` (exact source commit, source hashes and dependency versions) and accompanying SHA-256 checksums. Actions use fixed commit SHAs. AppImage packaging verifies both its tool and runtime by fixed size and SHA-256 before execution; there are no mutable `latest` downloads. Ordinary CI has read-only permissions. Only trusted release staging jobs may write draft release assets; the workflow does not publish automatically.
 
-The smoke test imports 13 synthetic photos with Unicode filenames through the real UI, exports two pages as PDF/JPEG, checks physical page sizes and DPI, verifies input hashes, and captures the UI. It has a 120-second external timeout. This is automated native/headless validation, not a claim of human usability testing. Public release receipts and retained synthetic QA identify the verified platform status for each package. Native build logs are maintained privately.
+The smoke test imports 13 synthetic photos with Unicode filenames through the real UI, exports two pages as PDF/JPEG, checks physical page sizes and DPI, verifies input hashes, and captures the UI. It has a 120-second external timeout. This is automated native/headless validation, not a claim of human usability testing. Public release receipts identify the verified platform status for each package. Detailed synthetic QA and native build logs are retained privately.
 
 For a native folder/archive build without AppImage tooling, use `python scripts/build.py --bundle-only`. Smoke output must use a fresh directory; the runner refuses to replace an existing report.
 
