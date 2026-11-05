@@ -1,5 +1,11 @@
 # Changes
 
+## 1.2.12 — 2026-11-05
+
+- Require patched Pillow 13.0.0 through the 13.x series for source installations and frozen builds.
+- Use pypdf 6.21.4 in locked PDF regression checks.
+- Correct the release validation metadata and document final-package acceptance requirements.
+
 ## 1.2.11 — 2026-11-04
 
 - Follow Linux desktop font, size, light/dark and accent preferences with independent providers and readable fallbacks; appearance detection needs no system Python or PyGObject.
