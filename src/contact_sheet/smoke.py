@@ -9,6 +9,7 @@ from PIL import Image, ImageCms
 from PySide6.QtCore import QSettings
 from .gui import MainWindow
 from .themes import apply_theme
+from .appearance import prepare_initial_appearance
 
 
 def run(app, destination: Path) -> int:
@@ -24,7 +25,11 @@ def run(app, destination: Path) -> int:
             source.save(path, icc_profile=srgb)
         paths.append(path)
     before = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
-    window = MainWindow(QSettings(str(destination / "smoke-settings.ini"), QSettings.IniFormat))
+    settings = QSettings(str(destination / "smoke-settings.ini"), QSettings.IniFormat)
+    prepare_initial_appearance(app, settings, theme_key="theme")
+    window = MainWindow(settings)
+    from .app import _prepare_window
+    _prepare_window(window)
     window.show()
     errors = []
     window._operation_failed = lambda exc: errors.append(str(exc))

@@ -6,6 +6,15 @@ from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import QApplication
 from . import __version__
 from .gui import MainWindow
+from .appearance import prepare_initial_appearance, prepare_window_for_show
+
+
+def _prepare_window(window):
+    def arrange():
+        window._arrange_toolbar()
+        window._arrange_output()
+        window._fit_splitter_contents()
+    prepare_window_for_show(window, arrange)
 
 
 def _qa_settings(argument: str) -> QSettings:
@@ -45,7 +54,9 @@ def main() -> int:
             settings = _qa_settings(sys.argv[index + 1])
         except (OSError, ValueError) as exc:
             raise SystemExit(f"Cannot start isolated QA: {exc}") from exc
+        prepare_initial_appearance(app, settings, theme_key="theme")
         window = MainWindow(settings)
+        _prepare_window(window)
         window.show()
         return app.exec()
     if "--smoke-test" in sys.argv:
@@ -54,6 +65,9 @@ def main() -> int:
         if len(sys.argv) <= index + 1:
             raise SystemExit("--smoke-test requires a new output folder")
         return run(app, Path(sys.argv[index + 1]))
-    window = MainWindow()
+    settings = QSettings("Steady State Studio", "Contact Sheet Maker")
+    prepare_initial_appearance(app, settings, theme_key="theme")
+    window = MainWindow(settings)
+    _prepare_window(window)
     window.show()
     return app.exec()

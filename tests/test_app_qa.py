@@ -87,8 +87,12 @@ def test_qa_launch_injects_preferences_and_runs_normal_event_loop(tmp_path, monk
     from contact_sheet import system_fonts
     monkeypatch.setattr(system_fonts, "capture_system_appearance", lambda app: {})
     monkeypatch.setattr(startup, "MainWindow", Window)
+    monkeypatch.setattr(startup, "prepare_initial_appearance", lambda app, settings, **kw:
+                        calls.append(("initial appearance", Path(settings.fileName()), kw["theme_key"])))
+    monkeypatch.setattr(startup, "_prepare_window", lambda window: calls.append("fit before show"))
     target = tmp_path / "interactive"
     monkeypatch.setattr(startup.sys, "argv", ["contact-sheet", "--qa-ui", str(target)])
     assert startup.main() == 0
     assert calls == [("native dialogs", startup.Qt.ApplicationAttribute.AA_DontUseNativeDialogs, True),
-                     "application", target / "settings.ini", "show", "event loop"]
+                     "application", ("initial appearance", target / "settings.ini", "theme"),
+                     target / "settings.ini", "fit before show", "show", "event loop"]
