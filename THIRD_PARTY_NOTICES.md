@@ -23,7 +23,7 @@ synthetic images to verify CMYK, wide-gamut RGB and grayscale conversion; they a
 not application defaults or packaged runtime assets.
 
 - Python: PSF license. https://www.python.org/psf/license/
-- PySide6 / Shiboken6 / Qt 6.11.2: LGPL-3.0-only alternative used by this build. Dynamic libraries remain separate in a one-folder bundle and may be replaced with compatible modified libraries. No application restriction is imposed on reverse engineering for debugging modifications to these libraries. LGPLv3 and GPLv3 texts are included under `packaging/licenses`.
+- PySide6 / Shiboken6 / Qt 6.12.0: LGPL-3.0-only alternative used by this build. Dynamic libraries remain separate in a one-folder bundle and may be replaced with compatible modified libraries. No application restriction is imposed on reverse engineering for debugging modifications to these libraries. LGPLv3 and GPLv3 texts are included under `packaging/licenses`.
   - Licensing details: https://doc.qt.io/qtforpython-6/licenses.html
   - PySide source: https://code.qt.io/cgit/pyside/pyside-setup.git/
   - Qt source: https://code.qt.io/cgit/qt/qtbase.git/ and https://code.qt.io/cgit/qt/qtsvg.git/
@@ -45,6 +45,9 @@ texts from the matching Qt base, SVG, image-format and Wayland source modules;
 its preamble records the checksum-verified official source archives. It is an
 intentionally broader notice set than the linked binary subset, not a claim
 that every optional Qt component is used by this application.
+The locked PySide6 metapackage also installs the separately versioned
+PySide6_Pdf and PySide6_WebEngine 6.12.0.140 build dependencies. Their modules
+and libraries are not distributed by this application.
 Packaging excludes the unused Qt PDF, Virtual Keyboard, QML/Quick, WebEngine,
 networking and optional Mesa software OpenGL components. The build rejects these
 components if they reappear. Native desktop input methods and platform plugins

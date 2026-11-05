@@ -161,12 +161,17 @@ def qa_archive(artifacts: Path, target: Path) -> Path:
 
 def check_build_info(info: dict, commit: str, tree: str, platform: str) -> None:
     version = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    index = json.loads((ROOT / "packaging/source-archives.json").read_text(encoding="utf-8"))
+    bindings = index.get("binding_versions", {})
+    if (not isinstance(bindings, dict)
+            or set(bindings) != {"PySide6", "PySide6_Addons", "PySide6_Essentials", "shiboken6", "PySide6_Pdf", "PySide6_WebEngine"}):
+        raise ValueError("Retained Qt binding version pins are incomplete")
     if (info.get("source_commit") != commit or info.get("source_tree") != tree
-            or info.get("platform") != platform or info.get("qt_runtime") != "6.11.2"
+            or info.get("platform") != platform or info.get("qt_runtime") != index["qt_version"]
             or info.get("application_version") != version):
         raise ValueError("BUILD-INFO does not match the tested source/platform/Qt version")
-    for name in ("PySide6", "PySide6_Addons", "PySide6_Essentials", "shiboken6"):
-        if info.get("dependencies", {}).get(name) != "6.11.2":
+    for name, binding_version in bindings.items():
+        if info.get("dependencies", {}).get(name) != binding_version:
             raise ValueError("BUILD-INFO dependencies do not match retained sources")
 
 

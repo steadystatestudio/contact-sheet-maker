@@ -30,7 +30,8 @@ ROOT = Path(__file__).resolve().parents[1]
 NAME = "Contact-Sheet-Maker"
 LICENSE_PACKAGES = (
     "Pillow", "reportlab", "charset-normalizer", "PySide6", "PySide6_Essentials",
-    "PySide6_Addons", "shiboken6", "PyInstaller", "altgraph", "packaging", "setuptools",
+    "PySide6_Addons", "PySide6_Pdf", "PySide6_WebEngine", "shiboken6", "PyInstaller",
+    "altgraph", "packaging", "setuptools",
 )
 
 

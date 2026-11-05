@@ -8,13 +8,15 @@ Pygments==2.21.0
 pyinstaller==6.22.3
 pyinstaller-hooks-contrib==2026.8
 pypdf==6.19.0
-PySide6==6.11.2
-PySide6_Addons==6.11.2
-PySide6_Essentials==6.11.2
+PySide6==6.12.0
+PySide6_Addons==6.12.0
+PySide6_Essentials==6.12.0
+PySide6_Pdf==6.12.0.140
+PySide6_WebEngine==6.12.0.140
 pytest==9.1.1
 reportlab==5.0.1
 setuptools==84.0.0
-shiboken6==6.11.2
+shiboken6==6.12.0
 # Native Windows build/test requirements (verified PyPI versions).
 pefile==2024.8.26; sys_platform == 'win32'
 pywin32-ctypes==0.2.3; sys_platform == 'win32'

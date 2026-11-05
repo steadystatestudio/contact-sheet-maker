@@ -102,9 +102,9 @@ def test_portable_archive_can_be_extracted(tmp_path):
 
 
 def info():
-    return {"source_commit": "a" * 40, "source_tree": "b" * 40, "platform": "linux", "qt_runtime": "6.11.2",
+    return {"source_commit": "a" * 40, "source_tree": "b" * 40, "platform": "linux", "qt_runtime": "6.12.0",
             "application_version": tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"],
-            "dependencies": {name: "6.11.2" for name in ["PySide6", "PySide6_Addons", "PySide6_Essentials", "shiboken6"]}}
+            "dependencies": dict(sources.source_index()["binding_versions"])}
 
 
 def test_application_version_matches_package_metadata():
@@ -120,7 +120,7 @@ def test_build_provenance_accepts_current_version_and_rejects_drift():
         release.check_build_info(value_info, "a" * 40, "b" * 40, "linux")
 
 
-@pytest.mark.parametrize("field,value", [("source_commit", "c" * 40), ("source_tree", None), ("platform", "win32"), ("qt_runtime", "6.12.0")])
+@pytest.mark.parametrize("field,value", [("source_commit", "c" * 40), ("source_tree", None), ("platform", "win32"), ("qt_runtime", "6.11.2")])
 def test_build_provenance_mismatch_stops_verification(field, value):
     value_info = info()
     value_info[field] = value
@@ -128,18 +128,42 @@ def test_build_provenance_mismatch_stops_verification(field, value):
         release.check_build_info(value_info, "a" * 40, "b" * 40, "linux")
 
 
+@pytest.mark.parametrize("name", ["PySide6", "PySide6_Addons", "PySide6_Essentials", "shiboken6", "PySide6_Pdf", "PySide6_WebEngine"])
+def test_partial_qt_upgrade_cannot_pass_build_provenance(name):
+    value_info = info()
+    value_info["dependencies"][name] = "6.11.2"
+    with pytest.raises(ValueError, match="dependencies"):
+        release.check_build_info(value_info, "a" * 40, "b" * 40, "linux")
+
+
 def test_sources_match_all_four_locked_distributions():
     index = sources.source_index()
     assert len(index["archives"]) == 5
     assert "shiboken6" in index["archives"][1]["covers"]
-    assert index["archives"][0]["size"] == 1019661552
+    assert index["archives"][0]["size"] == 443394020
     assert all(item["url"].startswith("https://") for item in index["archives"])
+
+
+def test_lock_includes_separately_versioned_qt_transitive_distributions():
+    lock = (ROOT / "requirements-build-lock.txt").read_text().splitlines()
+    assert "PySide6_Pdf==6.12.0.140" in lock
+    assert "PySide6_WebEngine==6.12.0.140" in lock
+
+
+@pytest.mark.parametrize("name", ["PySide6_Pdf", "PySide6_WebEngine"])
+def test_separate_qt_module_version_is_not_assumed_to_equal_core_version(name):
+    value_info = info()
+    value_info["dependencies"][name] = value_info["qt_runtime"]
+    with pytest.raises(ValueError, match="dependencies"):
+        release.check_build_info(value_info, "a" * 40, "b" * 40, "linux")
 
 
 def test_source_version_drift_fails_closed(tmp_path):
     (tmp_path / "packaging").mkdir()
     (tmp_path / "packaging/source-archives.json").write_text((ROOT / "packaging/source-archives.json").read_text())
-    (tmp_path / "requirements-build-lock.txt").write_text("PySide6==6.12.0\n")
+    (tmp_path / "requirements-build-lock.txt").write_text(
+        (ROOT / "requirements-build-lock.txt").read_text().replace("shiboken6==6.12.0", "shiboken6==6.11.2")
+    )
     with pytest.raises(ValueError, match="dependency lock"):
         sources.source_index(tmp_path)
 
