@@ -33,6 +33,7 @@ def test_restore_refits_late_normal_size_without_bypassing_final_check(app, monk
     font = QFont(dialog.font())
     font.setPointSizeF(18)
     dialog.setFont(font)
+    dialog.setStyleSheet("QWidget { font-size: 18pt; }")
     area = dialog.screen().availableGeometry()
     dialog.resize(min(600, area.width() - 40), min(400, area.height() - 80))
     monkeypatch.setattr(picker, "available_geometry", lambda window, raw: area)

@@ -41,6 +41,8 @@ def case(app, monkeypatch, tmp_path):
     settings.setValue("appearance/font_mode", "custom")
     settings.setValue("appearance/font_family", previous_font.family())
     settings.setValue("appearance/font_size_pt", 12)
+    # Plain geometry fixtures must not inherit a previous app text stylesheet.
+    app.setStyleSheet("")
     appearance.configure_appearance(app, settings, refresh=True, theme_key=previous_key)
     assert app.font().pointSizeF() == 12
     class NativeQtArea(QObject):
