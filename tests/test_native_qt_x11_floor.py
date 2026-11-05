@@ -6,7 +6,16 @@ from types import SimpleNamespace
 from typing import ClassVar
 
 import pytest
-from PySide6.QtCore import QCoreApplication, QEvent, QObject, QRect, QSettings, Signal
+from PySide6.QtCore import (
+    QCoreApplication,
+    QEvent,
+    QObject,
+    QRect,
+    QSettings,
+    QSize,
+    Qt,
+    Signal,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QLabel,
@@ -171,6 +180,18 @@ def test_non_x11_disabled_provider_keeps_existing_normal_floor(case, monkeypatch
 def test_enabled_mapper_is_outside_native_x11_branch(case):
     c = case
     c.provider.enabled = True
+    # Isolate the native-X11 branch after the independent first-map negotiation.
+    c.window.showNormal()
+
+    def normal_frame_ready():
+        handle = GUARD.observe_window_screen(c.window, c.guard._screen_changed, owner=c.guard)
+        return (handle is not None and handle.isExposed() and not c.window.isMaximized()
+                and not handle.windowState() & (Qt.WindowMaximized | Qt.WindowMinimized | Qt.WindowFullScreen))
+
+    c.wait(normal_frame_ready)
     c.guard.update()
-    assert c.window.minimumSize() == c.guard.preferredMinimum.boundedTo(c.area[0].size())
+    frame = c.window.frameGeometry()
+    capacity = QSize(max(1, c.area[0].width() - max(0, frame.width() - c.window.width())),
+                     max(1, c.area[0].height() - max(0, frame.height() - c.window.height())))
+    assert c.window.minimumSize() == c.guard.preferredMinimum.boundedTo(capacity)
     assert not c.guard.constrained_native_maximum and c.automatic_maximize == []
