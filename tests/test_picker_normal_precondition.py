@@ -46,11 +46,14 @@ def test_restore_refits_late_normal_size_without_bypassing_final_check(
     monkeypatch.setattr(dialog, "frameGeometry", lambda: QRect(0, 0, dialog.width() + 14, dialog.height() + 40))
     request = qa._request_qa_state
     configured, checked = [], []
+    configure_scheduled = False
     timers = []
 
     def state_request(window, maximized):
+        nonlocal configure_scheduled
         request(window, maximized)
-        if not maximized:
+        if not maximized and not configure_scheduled:
+            configure_scheduled = True
             timer = QTimer(dialog)
             timer.setSingleShot(True)
             timer.timeout.connect(lambda: (dialog.resize(dialog.width(), area.height() + 20), configured.append(True)))
@@ -60,6 +63,7 @@ def test_restore_refits_late_normal_size_without_bypassing_final_check(
     monkeypatch.setattr(qa, "_request_qa_state", state_request)
 
     def strict_final(window):
+        qa._settle_geometry(app, window)
         assert not window.isMaximized()
         assert not qa._qa_window_handle(window).windowState()
         assert window.frameGeometry().height() <= area.height()
@@ -97,21 +101,32 @@ def test_restore_refits_late_normal_size_without_bypassing_final_check(
         app.processEvents()
 
 
-def test_picker_never_acknowledging_normal_fails_within_bound(monkeypatch):
-    from types import SimpleNamespace
-
+def test_picker_never_acknowledging_normal_fails_within_bound(app, monkeypatch):
+    dialog = QDialog()
     clock = [0.0]
     monkeypatch.setattr(picker.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(picker.time, "sleep", lambda seconds: clock.__setitem__(0, clock[0] + seconds))
     monkeypatch.setattr(qa, "_request_qa_state", lambda window, maximized: None)
-    monkeypatch.setattr(qa, "_settle_geometry", lambda app, window, normal: None)
     monkeypatch.setattr(qa, "_qa_window_handle", lambda window: None)
-    dialog = SimpleNamespace(isMaximized=lambda: True)
+    monkeypatch.setattr(dialog, "isMaximized", lambda: True)
+    monkeypatch.setattr(qa, "appearance_probes_pending", lambda app: False)
+    monkeypatch.setattr(qa, "workarea_probes_pending", lambda app: False)
     final = []
-    with pytest.raises(AssertionError, match="picker-normal-refit-did-not-settle"):
-        picker._prepare_normal_picker(SimpleNamespace(processEvents=lambda: None), dialog,
-                                      lambda window: final.append(True), timeout=.1)
-    assert not final and .1 <= clock[0] < .2
+
+    def strict_final(window):
+        qa._settle_geometry(app, window, timeout=.1)
+        final.append(True)
+
+    try:
+        with pytest.raises(AssertionError, match="geometry-did-not-settle"):
+            picker._prepare_normal_picker(app, dialog, strict_final, timeout=.1)
+        assert not final and .1 <= clock[0] < .2
+        assert all(not timer.isActive() for timer in dialog.findChildren(QTimer))
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        app.processEvents()
 
 
 def test_already_normal_picker_never_requires_maximization(app, monkeypatch):
