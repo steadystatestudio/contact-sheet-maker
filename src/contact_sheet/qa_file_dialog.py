@@ -4,7 +4,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication, QEvent, QSettings, QUrl
+from PySide6.QtCore import QCoreApplication, QEvent, QSettings, Qt, QUrl
 from PySide6.QtGui import QFontInfo
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -27,14 +27,20 @@ def _prepare_normal_picker(app, dialog, settle, *, timeout=5):
         _settle_geometry,
     )
 
-    _request_qa_state(dialog, True)
-    _settle_geometry(app, dialog, normal=False)
-    _request_qa_state(dialog, False)
     deadline = time.monotonic() + timeout
-    previous, stable = None, 0
+    previous, stable, restored = None, 0, False
     while time.monotonic() < deadline:
         app.processEvents()
         handle = _qa_window_handle(dialog)
+        maximized = dialog.isMaximized() or (
+            handle is not None and handle.windowState() & Qt.WindowState.WindowMaximized)
+        if maximized and not restored:
+            restored = True
+            _request_qa_state(dialog, True)
+            _settle_geometry(app, dialog, normal=False)
+            _request_qa_state(dialog, False)
+            previous, stable = None, 0
+            continue
         if not dialog.isMaximized() and (handle is None or not handle.windowState()):
             area = available_geometry(dialog, dialog.screen().availableGeometry())
             frame = dialog.frameGeometry()

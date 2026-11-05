@@ -23,7 +23,10 @@ def app():
 
 
 @pytest.mark.parametrize("reject_final", [False, True])
-def test_restore_refits_late_normal_size_without_bypassing_final_check(app, monkeypatch, reject_final):
+@pytest.mark.parametrize("initial_maximum", [False, True])
+def test_restore_refits_late_normal_size_without_bypassing_final_check(
+    app, monkeypatch, reject_final, initial_maximum,
+):
     dialog = QDialog()
     layout = QVBoxLayout(dialog)
     edit = QLineEdit("unchanged synthetic input")
@@ -68,7 +71,15 @@ def test_restore_refits_late_normal_size_without_bypassing_final_check(app, monk
             raise AssertionError("final-normal-check-rejected")
 
     try:
-        dialog.show()
+        if initial_maximum:
+            dialog.showMaximized()
+        else:
+            dialog.showNormal()
+            timer = QTimer(dialog)
+            timer.setSingleShot(True)
+            timer.timeout.connect(dialog.showMaximized)
+            timer.start(40)
+            timers.append(timer)
         app.processEvents()
         if reject_final:
             with pytest.raises(AssertionError, match="final-normal-check-rejected"):
@@ -101,3 +112,45 @@ def test_picker_never_acknowledging_normal_fails_within_bound(monkeypatch):
         picker._prepare_normal_picker(SimpleNamespace(processEvents=lambda: None), dialog,
                                       lambda window: final.append(True), timeout=.1)
     assert not final and .1 <= clock[0] < .2
+
+
+def test_already_normal_picker_never_requires_maximization(app, monkeypatch):
+    dialog = QDialog()
+    layout = QVBoxLayout(dialog)
+    edit = QLineEdit("unchanged synthetic input")
+    buttons = QDialogButtonBox(QDialogButtonBox.Open | QDialogButtonBox.Cancel)
+    layout.addWidget(edit)
+    layout.addWidget(buttons)
+    font = QFont(dialog.font())
+    font.setPointSizeF(18)
+    dialog.setFont(font)
+    dialog.setStyleSheet("QWidget { font-size: 18pt; }")
+    dialog.resize(600, 250)
+    area = dialog.screen().availableGeometry()
+    request = qa._request_qa_state
+    requests = []
+    monkeypatch.setattr(picker, "available_geometry", lambda window, raw: area)
+    monkeypatch.setattr(qa, "available_geometry", lambda window, raw: area)
+    monkeypatch.setattr(qa, "appearance_probes_pending", lambda app: False)
+    monkeypatch.setattr(qa, "workarea_probes_pending", lambda app: False)
+
+    def normal_only(window, maximized):
+        assert not maximized, "A normal picker must not depend on maximizing support"
+        requests.append(maximized)
+        request(window, maximized)
+
+    monkeypatch.setattr(qa, "_request_qa_state", normal_only)
+    try:
+        dialog.showNormal()
+        app.processEvents()
+        assert not dialog.isMaximized() and not qa._qa_window_handle(dialog).windowState()
+        picker._prepare_normal_picker(app, dialog, lambda window: qa._settle_geometry(app, window))
+        assert requests == [False]
+        assert edit.text() == "unchanged synthetic input"
+        assert all(button.font().pointSizeF() == 18 for button in buttons.buttons())
+        assert qa._qa_footprint_fits(dialog, dialog.frameGeometry(), area)
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        app.processEvents()
