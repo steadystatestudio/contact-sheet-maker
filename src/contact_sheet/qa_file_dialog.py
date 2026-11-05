@@ -1,5 +1,6 @@
 """Inspect Qt-owned file pickers only inside explicit package QA."""
 
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -15,6 +16,47 @@ from PySide6.QtWidgets import (
 )
 
 from .desktop_geometry import available_geometry
+
+
+def _prepare_normal_picker(app, dialog, settle, *, timeout=5):
+    """Acknowledge native restore, then fit its normal frame before strict QA."""
+    from .appearance_qa import (
+        _qa_footprint_fits,
+        _qa_window_handle,
+        _request_qa_state,
+        _settle_geometry,
+    )
+
+    _request_qa_state(dialog, True)
+    _settle_geometry(app, dialog, normal=False)
+    _request_qa_state(dialog, False)
+    deadline = time.monotonic() + timeout
+    previous, stable = None, 0
+    while time.monotonic() < deadline:
+        app.processEvents()
+        handle = _qa_window_handle(dialog)
+        if not dialog.isMaximized() and (handle is None or not handle.windowState()):
+            area = available_geometry(dialog, dialog.screen().availableGeometry())
+            frame = dialog.frameGeometry()
+            target = (
+                min(dialog.width(), max(1, area.width() - max(0, frame.width() - dialog.width()))),
+                min(dialog.height(), max(1, area.height() - max(0, frame.height() - dialog.height()))),
+            )
+            if target != dialog.size().toTuple():
+                dialog.resize(*target)
+            signature = (dialog.size().toTuple(), dialog.minimumSize().toTuple(),
+                         dialog.frameGeometry().getRect(), area.getRect())
+            valid = _qa_footprint_fits(dialog, dialog.frameGeometry(), area)
+            stable = stable + 1 if valid and signature == previous else 0
+            previous = signature
+            if stable >= 6:
+                break
+        else:
+            stable = 0
+        time.sleep(.02)
+    else:
+        raise AssertionError(("picker-normal-refit-did-not-settle", previous))
+    settle(dialog)
 
 
 @contextmanager
@@ -93,7 +135,7 @@ def inspect_file_dialog(app, window, destination, surfaces, settle):
             cap_width = max(1, area.width() - max(0, frame.width() - dialog.width()))
             cap_height = max(1, area.height() - max(0, frame.height() - dialog.height()))
             dialog.resize(min(dialog.width(), cap_width), min(dialog.height(), cap_height))
-            settle(dialog)
+            _prepare_normal_picker(app, dialog, settle)
             assert dialog.testOption(QFileDialog.DontUseNativeDialog)
             assert Path(dialog.directory().absolutePath()).resolve() == root.resolve()
             for widget in dialog.findChildren(QWidget):

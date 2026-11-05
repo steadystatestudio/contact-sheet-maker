@@ -1,0 +1,102 @@
+"""A late restored configure must be fitted before strict normal picker QA."""
+import os
+
+import pytest
+from PySide6.QtCore import QCoreApplication, QEvent, QRect, QTimer
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QDialogButtonBox,
+    QLineEdit,
+    QVBoxLayout,
+)
+
+from contact_sheet import appearance_qa as qa
+from contact_sheet import qa_file_dialog as picker
+
+
+@pytest.fixture(scope="module")
+def app():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    return QApplication.instance() or QApplication([])
+
+
+@pytest.mark.parametrize("reject_final", [False, True])
+def test_restore_refits_late_normal_size_without_bypassing_final_check(app, monkeypatch, reject_final):
+    dialog = QDialog()
+    layout = QVBoxLayout(dialog)
+    edit = QLineEdit("unchanged synthetic input")
+    buttons = QDialogButtonBox(QDialogButtonBox.Open | QDialogButtonBox.Cancel)
+    layout.addWidget(edit)
+    layout.addWidget(buttons)
+    font = QFont(dialog.font())
+    font.setPointSizeF(18)
+    dialog.setFont(font)
+    area = dialog.screen().availableGeometry()
+    dialog.resize(min(600, area.width() - 40), min(400, area.height() - 80))
+    monkeypatch.setattr(picker, "available_geometry", lambda window, raw: area)
+    monkeypatch.setattr(qa, "available_geometry", lambda window, raw: area)
+    monkeypatch.setattr(qa, "appearance_probes_pending", lambda app: False)
+    monkeypatch.setattr(qa, "workarea_probes_pending", lambda app: False)
+    monkeypatch.setattr(dialog, "frameGeometry", lambda: QRect(0, 0, dialog.width() + 14, dialog.height() + 40))
+    request = qa._request_qa_state
+    configured, checked = [], []
+    timers = []
+
+    def state_request(window, maximized):
+        request(window, maximized)
+        if not maximized:
+            timer = QTimer(dialog)
+            timer.setSingleShot(True)
+            timer.timeout.connect(lambda: (dialog.resize(dialog.width(), area.height() + 20), configured.append(True)))
+            timer.start(40)
+            timers.append(timer)
+
+    monkeypatch.setattr(qa, "_request_qa_state", state_request)
+
+    def strict_final(window):
+        assert not window.isMaximized()
+        assert not qa._qa_window_handle(window).windowState()
+        assert window.frameGeometry().height() <= area.height()
+        assert window.frameGeometry().width() <= area.width()
+        assert configured and edit.text() == "unchanged synthetic input"
+        assert all(button.font().pointSizeF() == 18 for button in buttons.buttons())
+        checked.append(True)
+        if reject_final:
+            raise AssertionError("final-normal-check-rejected")
+
+    try:
+        dialog.show()
+        app.processEvents()
+        if reject_final:
+            with pytest.raises(AssertionError, match="final-normal-check-rejected"):
+                picker._prepare_normal_picker(app, dialog, strict_final)
+        else:
+            picker._prepare_normal_picker(app, dialog, strict_final)
+        assert checked == [True] and configured == [True]
+        assert dialog.font().pointSizeF() == 18
+    finally:
+        for timer in timers:
+            timer.stop()
+        dialog.close()
+        dialog.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        app.processEvents()
+
+
+def test_picker_never_acknowledging_normal_fails_within_bound(monkeypatch):
+    from types import SimpleNamespace
+
+    clock = [0.0]
+    monkeypatch.setattr(picker.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(picker.time, "sleep", lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+    monkeypatch.setattr(qa, "_request_qa_state", lambda window, maximized: None)
+    monkeypatch.setattr(qa, "_settle_geometry", lambda app, window, normal: None)
+    monkeypatch.setattr(qa, "_qa_window_handle", lambda window: None)
+    dialog = SimpleNamespace(isMaximized=lambda: True)
+    final = []
+    with pytest.raises(AssertionError, match="picker-normal-refit-did-not-settle"):
+        picker._prepare_normal_picker(SimpleNamespace(processEvents=lambda: None), dialog,
+                                      lambda window: final.append(True), timeout=.1)
+    assert not final and .1 <= clock[0] < .2

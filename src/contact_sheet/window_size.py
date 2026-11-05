@@ -135,6 +135,10 @@ class WindowSizeGuard(QObject):
                 basis = "last-normal-frame"
             self.constrained_native_maximum = bool(verified_area and (
                 wanted.width() > normal_capacity.width() or wanted.height() > normal_capacity.height()))
+            native_x11_overflow = (available is None and not self._workarea.enabled
+                                   and QGuiApplication.platformName() == "xcb"
+                                   and (wanted.width() > normal_capacity.width()
+                                        or wanted.height() > normal_capacity.height()))
             self.geometry_constraint = dict(
                 source=self._workarea.last_details.get("source", "captured-qt"),
                 reason=("preferred-minimum-exceeds-validated-workarea" if self.constrained_native_maximum
@@ -143,7 +147,7 @@ class WindowSizeGuard(QObject):
                 preferred_minimum=list(wanted.toTuple()), client_capacity=list(normal_capacity.toTuple()),
                 capacity_basis=basis, available_geometry=list(area.getRect()),
             )
-            if compositor_fallback or self.constrained_native_maximum:
+            if compositor_fallback or self.constrained_native_maximum or native_x11_overflow:
                 # A complete layout that cannot fit must not advertise its capped
                 # height as a hard compositor minimum, even before first map.
                 # Keep persistent controls and a useful scroll viewport instead.
@@ -152,6 +156,13 @@ class WindowSizeGuard(QObject):
                     viewport_floor = max(self.scroll.minimumHeight(),
                                          self.scroll.minimumSizeHint().height())
                     persistent.setHeight(persistent.height() + max(0, 120 - viewport_floor))
+                if native_x11_overflow:
+                    # Only overflowing dimensions need negotiation on native Qt/X11.
+                    # Keep the complete floor in every dimension that still fits.
+                    if wanted.width() <= normal_capacity.width():
+                        persistent.setWidth(max(persistent.width(), wanted.width()))
+                    if wanted.height() <= normal_capacity.height():
+                        persistent.setHeight(max(persistent.height(), wanted.height()))
                 minimum = persistent.boundedTo(cap)
             if window.minimumSize() != minimum:
                 window.setMinimumSize(minimum)
