@@ -24,7 +24,7 @@ The interface resolves your desktop font, size, theme and accent independently. 
 
 ## Run from source
 
-Python 3.10+ (tested with Python 3.12 on Debian 13 x86_64):
+Python 3.12+ is required when running or building from source. Downloaded packages include Python. Earlier validation used Python 3.12 on Debian 13 x86_64:
 
 ```sh
 python -m venv .venv

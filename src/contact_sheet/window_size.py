@@ -121,16 +121,6 @@ class WindowSizeGuard(QObject):
                                 + 2 * self.scroll.frameWidth() + bar_width)
                     wanted.setWidth(max(wanted.width(), required))
             minimum = wanted.boundedTo(cap)
-            if compositor_fallback:
-                # An unverified Qt work area must not stop the compositor from
-                # maximizing. Keep persistent controls and a useful viewport;
-                # the normal collision floor is restored on a state change.
-                persistent = QSize(layout.minimumSize())
-                if self.scroll is not None:
-                    viewport_floor = max(self.scroll.minimumHeight(),
-                                         self.scroll.minimumSizeHint().height())
-                    persistent.setHeight(persistent.height() + max(0, 120 - viewport_floor))
-                minimum = persistent.boundedTo(cap)
             self.preferredMinimum = wanted
             normal_mode = not (window.isMaximized() or window.isFullScreen() or window.isMinimized())
             verified_area = (available is None and self._workarea.enabled
@@ -153,6 +143,16 @@ class WindowSizeGuard(QObject):
                 preferred_minimum=list(wanted.toTuple()), client_capacity=list(normal_capacity.toTuple()),
                 capacity_basis=basis, available_geometry=list(area.getRect()),
             )
+            if compositor_fallback or self.constrained_native_maximum:
+                # A complete layout that cannot fit must not advertise its capped
+                # height as a hard compositor minimum, even before first map.
+                # Keep persistent controls and a useful scroll viewport instead.
+                persistent = QSize(layout.minimumSize())
+                if self.scroll is not None:
+                    viewport_floor = max(self.scroll.minimumHeight(),
+                                         self.scroll.minimumSizeHint().height())
+                    persistent.setHeight(persistent.height() + max(0, 120 - viewport_floor))
+                minimum = persistent.boundedTo(cap)
             if window.minimumSize() != minimum:
                 window.setMinimumSize(minimum)
             if self.constrained_native_maximum and normal_mode and window.isVisible():
