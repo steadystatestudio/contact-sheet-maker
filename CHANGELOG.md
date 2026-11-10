@@ -1,5 +1,10 @@
 # Changes
 
+## Unreleased
+
+- When replacing a JPEG set with a shorter one, remove the older sheets with higher page numbers so the folder does not mix two exports. The Replace prompt counts and lists them first.
+- Flush finished sheets to disk before installing them, so a power cut cannot leave an empty file in place of a replaced sheet.
+
 ## 1.2.12 — 2026-11-05
 
 - Require patched Pillow 13.0.0 through the 13.x series for source installations and frozen builds.

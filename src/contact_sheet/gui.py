@@ -913,21 +913,25 @@ class MainWindow(QMainWindow):
         settings = self.sheet_settings()
         stem = self.stem_input.text().strip()
         fmt = self.format_combo.currentText()
-        from .core import output_paths, available_output_stem
+        from .core import output_paths, available_output_stem, stale_jpeg_sheets
         try:
             paths = output_paths(len(self.model.photos), settings, destination, stem, fmt)
         except (ValueError, OSError) as exc:
             QMessageBox.warning(self, "Choose a valid output name", str(exc)); return
         conflicts = [path for path in paths if path.exists() or path.is_symlink()]
+        stale = stale_jpeg_sheets(len(self.model.photos), settings, destination, stem, fmt)
         overwrite = False
-        if conflicts:
-            box = QMessageBox(QMessageBox.Warning, "Replace existing sheets?", f"{len(conflicts)} output file{'s' if len(conflicts) != 1 else ''} already exist{'' if len(conflicts) != 1 else 's'} in this folder.\n\nKeep Both saves this entire batch under a new filename. Original photos can never be replaced.", QMessageBox.Yes | QMessageBox.No, self)
+        if conflicts or stale:
+            existing = len(conflicts) + len(stale)
+            older = (f"\n\n{len(stale)} of them {'is an older sheet' if len(stale) == 1 else 'are older sheets'} with a higher page number than this export. "
+                     "Replace removes them so the set stays consistent." if stale else "")
+            box = QMessageBox(QMessageBox.Warning, "Replace existing sheets?", f"{existing} output file{'s' if existing != 1 else ''} with this name already exist{'' if existing != 1 else 's'} in this folder.{older}\n\nKeep Both saves this entire batch under a new filename. Original photos can never be replaced.", QMessageBox.Yes | QMessageBox.No, self)
             box.button(QMessageBox.Yes).setText("Replace")
             box.button(QMessageBox.No).setText("Cancel")
             keep_both = box.addButton("Keep Both", QMessageBox.ActionRole)
             box.setDefaultButton(QMessageBox.No)
             box.setEscapeButton(QMessageBox.No)
-            box.setDetailedText("\n".join(str(path) for path in conflicts))
+            box.setDetailedText("\n".join(str(path) for path in conflicts + stale))
             overwrite = box.exec() == QMessageBox.Yes
             if box.clickedButton() == keep_both:
                 try:

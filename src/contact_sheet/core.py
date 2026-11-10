@@ -537,6 +537,37 @@ def output_paths(count: int, settings: SheetSettings, destination: Path,
 
 
 
+def stale_jpeg_sheets(count: int, settings: SheetSettings, destination: Path,
+                      stem: str = "contact-sheet", format: str = "PDF") -> list[Path]:
+    """Sheets of an earlier, longer JPEG export that a new export would not rewrite.
+
+    Replacing pages 001-002 of a set that previously ran to 005 would leave
+    003-005 from the old photos mixed into the new set.
+    """
+    if not isinstance(format, str) or format.upper() != "JPEG":
+        return []
+    pages = settings.page_count(count)
+    stale = []
+    try:
+        entries = sorted(Path(destination).expanduser().iterdir())
+    except OSError:
+        return []
+    for path in entries:
+        match = re.fullmatch(re.escape(os.path.normcase(stem)) + r"-([0-9]{3,})\.jpg", os.path.normcase(path.name))
+        if match and int(match.group(1)) > pages and path.is_file() and not path.is_symlink():
+            stale.append(path)
+    return stale
+
+
+def _sync_file(path: Path) -> None:
+    """Flush a finished staged file so installing it cannot publish an empty one after a power cut."""
+    descriptor = os.open(path, os.O_RDWR | getattr(os, "O_BINARY", 0))
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def available_output_stem(count: int, settings: SheetSettings, destination: Path,
                           stem: str = "contact-sheet", format: str = "PDF") -> str:
     """Find one unused name for the whole batch; export still installs exclusively.
@@ -728,9 +759,12 @@ def _commit_outputs(staged: list[Path], outputs: list[Path], snapshots: list,
 class ExportedPaths(list):
     """Successful output paths plus any previous-sheet backups left for cleanup."""
 
-    def __init__(self, paths, retained_backups=()):
+    def __init__(self, paths, retained_backups=(), removed_sheets=(), stale_sheets=()):
         super().__init__(paths)
         self.retained_backups = tuple(retained_backups)
+        # Older trailing sheets removed with a replaced set, and any that could not be removed.
+        self.removed_sheets = tuple(removed_sheets)
+        self.stale_sheets = tuple(stale_sheets)
 
 
 def export_sheets(photos: list[Photo], settings: SheetSettings, destination: Path,
@@ -749,7 +783,9 @@ def export_sheets(photos: list[Photo], settings: SheetSettings, destination: Pat
     photos = list(photos)
     outputs = output_paths(len(photos), settings, destination, stem, format)
     validate_captions(photos, settings, cancel)
-    _protect_sources(photos, outputs)
+    # Replacing a set also retires its older trailing sheets; never a source photo.
+    stale = stale_jpeg_sheets(len(photos), settings, destination, stem, format) if overwrite else []
+    _protect_sources(photos, outputs + stale)
     snapshots = [_snapshot(path) for path in outputs]
     conflicts = [path.name for path, snapshot in zip(outputs, snapshots) if snapshot is not None]
     if conflicts and not overwrite:
@@ -794,13 +830,27 @@ def export_sheets(photos: list[Photo], settings: SheetSettings, destination: Pat
                 if progress:
                     progress(page_index + 1, total)
         _check_cancel(cancel)
+        for path in staged:
+            _sync_file(path)
         if phase:
             phase("checking")
         _verify_sources(photos, cancel)
         if phase:
             phase("committing")
+        stale_snapshots = [_snapshot(path) for path in stale]
         retained = _commit_outputs(staged, outputs, snapshots, photos, cancel)
-        return ExportedPaths(outputs, retained)
+        removed, remaining = [], []
+        for path, snapshot in zip(stale, stale_snapshots):
+            try:
+                # The new set is complete. Remove only the file that was seen before committing.
+                if snapshot is not None and _snapshot(path) == snapshot:
+                    path.unlink()
+                    removed.append(path)
+                elif _snapshot(path) is not None:
+                    remaining.append(path)
+            except (OSError, ValueError):
+                remaining.append(path)
+        return ExportedPaths(outputs, retained, removed, remaining)
     finally:
         # Retain any irreplaceable rollback backup, otherwise remove all staging files.
         if not any(stage_dir.glob("backup-*")):
