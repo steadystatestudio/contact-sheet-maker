@@ -1,6 +1,6 @@
-# Contact Sheet Maker 1.2.12 validation
+# Contact Sheet Maker 1.2.13 validation
 
-At version preparation on 2026-11-05, the final 1.2.12 package builds,
+At version preparation on 2026-11-09, the final 1.2.13 package builds,
 release receipts and native package acceptance are pending. Earlier audit
 checks support the dependency changes; they do not validate rebuilt bytes.
 

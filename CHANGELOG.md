@@ -1,6 +1,6 @@
 # Changes
 
-## Unreleased
+## 1.2.13 — 2026-11-09
 
 - When replacing a JPEG set with a shorter one, remove the older sheets with higher page numbers so the folder does not mix two exports. The Replace prompt counts and lists them first.
 - Flush finished sheets to disk before installing them, so a power cut cannot leave an empty file in place of a replaced sheet.
